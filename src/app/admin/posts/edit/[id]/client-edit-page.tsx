@@ -206,10 +206,15 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
-        // Don't reset form here, user is redirected
-        router.push('/admin/posts'); 
+        // Don't reset form here, user is redirected by the server action
+        // router.push('/admin/posts'); 
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Check if it's a Next.js redirect signal
+      if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
+        // This is a redirect, Next.js will handle it. Do not show an error toast.
+        return;
+      }
       console.error("Error updating post:", error);
       toast({
         variant: "destructive",

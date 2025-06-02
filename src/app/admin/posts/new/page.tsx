@@ -272,7 +272,7 @@ export default function NewPostPage() {
             const errorMsg = errorJson.error || 'Scraping failed.';
             const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
             errorDesc = `${errorMsg}${details}`;
-            if (errorJson.from === 'api-scrape') { // Check if the error is from our API
+            if (errorJson.from === 'api-scrape') { 
                  errorDesc += ' Please check the server logs for /api/scrape.';
             }
           } else {
@@ -306,7 +306,7 @@ export default function NewPostPage() {
       if (scrapedData.error) {
         let errorMsg = scrapedData.error;
         const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
-        if (scrapedData.error === 'internal' || (scrapedData as any).from === 'api-scrape') { // Check if the error is from our API explicitly
+        if (scrapedData.error === 'internal' || (scrapedData as any).from === 'api-scrape') { 
           errorMsg += ' Please check the server logs for /api/scrape.';
         }
         setScrapingError(`${errorMsg}${details}`);
@@ -338,7 +338,6 @@ export default function NewPostPage() {
       
       toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
       
-      // Automatically process the scraped thumbnail data URI
       await autoProcessScrapedThumbnail(scrapedData.thumbnailDataUri, scrapedData.thumbnailUrl);
   
     } catch (error: any) { 
@@ -409,14 +408,19 @@ export default function NewPostPage() {
         if (editorRef.current) {
           editorRef.current.setContent('<p>Write your blog post content here...</p>');
         }
-        router.push('/admin/posts'); 
+        // router.push('/admin/posts'); // This line is handled by the redirect in createPostAction
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Check if it's a Next.js redirect signal
+      if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
+        // This is a redirect, Next.js will handle it. Do not show an error toast.
+        return;
+      }
       console.error("Error submitting post:", error);
       toast({
         variant: "destructive",
         title: 'Submission Error',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred during submission.',
+        description: error.message || 'An unexpected error occurred during submission.',
       });
     } finally {
       setIsSubmittingForm(false);
