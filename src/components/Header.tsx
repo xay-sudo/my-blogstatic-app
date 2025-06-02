@@ -9,9 +9,20 @@ import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
+import React, { Suspense } from 'react'; // Import Suspense
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
+}
+
+function SearchBarFallback() {
+  return (
+    <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-md items-center space-x-2" aria-busy="true" aria-live="polite">
+      <Skeleton className="h-10 flex-grow" />
+      <Skeleton className="h-10 w-10" />
+      <span className="sr-only">Loading search bar...</span>
+    </div>
+  );
 }
 
 export default function Header({ siteSettings }: HeaderProps) {
@@ -114,7 +125,9 @@ export default function Header({ siteSettings }: HeaderProps) {
             ) : null}
           </div>
           <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
-            <SearchBarClient />
+            <Suspense fallback={<SearchBarFallback />}>
+              <SearchBarClient />
+            </Suspense>
           </div>
         </div>
       </nav>
