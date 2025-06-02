@@ -158,7 +158,6 @@ export default function NewPostPage() {
                   <FormLabel>Content</FormLabel>
                   <FormControl>
                     <Editor
-                      apiKey="fhz6kca5oz1s8icmehxt7tz2m4l3xz37vcei0tqa1dorl6tk"
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
@@ -234,4 +233,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
