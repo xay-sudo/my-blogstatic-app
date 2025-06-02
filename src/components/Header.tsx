@@ -4,30 +4,30 @@
 import Link from 'next/link';
 // import { ShieldCheck } from 'lucide-react'; // Admin link removed for now
 // import { useAuth } from '@/contexts/AuthContext'; // Admin link removed for now
-import { useEffect, useState } from 'react';
+// import { useEffect, useState } from 'react'; // No longer needed for date
 
 export default function Header() {
   // const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Kept for potential future re-add of admin link
-  const [currentDate, setCurrentDate] = useState('');
+  // const [currentDate, setCurrentDate] = useState(''); // Date display removed
 
-  useEffect(() => {
-    setCurrentDate(new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }));
-  }, []);
+  // useEffect(() => { // Date display removed
+  //   setCurrentDate(new Date().toLocaleDateString('en-US', {
+  //     year: 'numeric',
+  //     month: 'long',
+  //     day: 'numeric',
+  //   }));
+  // }, []);
 
   return (
     <>
-      {/* Top Date Bar */}
-      {currentDate && (
+      {/* Top Date Bar - Removed */}
+      {/* {currentDate && (
         <div className="bg-muted/40 py-1 border-b border-muted">
           <div className="container mx-auto px-4">
             <p className="text-xs text-muted-foreground">{currentDate}</p>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Main Header with Logo and Ad space */}
       <header className="bg-card border-b">
@@ -51,3 +51,4 @@ export default function Header() {
     </>
   );
 }
+
