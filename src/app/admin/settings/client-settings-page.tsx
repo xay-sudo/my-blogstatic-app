@@ -166,24 +166,10 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('bannerImageAltText', data.bannerImageAltText || '');
     formData.append('bannerCustomHtml', data.bannerCustomHtml || '');
     formData.append('adminUsername', data.adminUsername || '');
-    // Only send password if it's being changed (not empty)
-    // If username is set but password field is empty, it means user wants to keep existing password (if any)
-    // However, our schema refinement ensures that if username is set, password must also be set if it's a new setup.
-    // For updates, if password field is empty, we might not want to change it.
-    // The current server action updates password if provided. If empty, it might clear it.
-    // For this simple local auth, we'll send it. If it's empty and username is also empty, it clears both.
-    // If username is present, password must be present (validated by schema).
+
     if (data.adminPassword && data.adminPassword.length > 0) {
       formData.append('adminPassword', data.adminPassword);
     } else if (data.adminUsername && propsInitialSettings.adminUsername === data.adminUsername && propsInitialSettings.adminPassword) {
-      // If username hasn't changed and there was an initial password, keep the old one by not sending an empty one
-      // (server action will not update password if not provided in form data explicitly)
-      // This part is tricky because form.append will convert empty string.
-      // The server-side logic for updateSettings is better: it takes Partial<SiteSettings>.
-      // If data.adminPassword is '', it will set it to ''.
-      // If we want to "not change password" when the field is empty, the logic here or in server action needs adjustment.
-      // For now, if password field is empty, it will attempt to set it to empty string.
-      // The schema requires password if username is set, so this case might not be hit often for "keep password"
        formData.append('adminPassword', data.adminPassword || '');
     } else {
        formData.append('adminPassword', data.adminPassword || '');
@@ -197,21 +183,38 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
           title: 'Settings Updated',
           description: 'Site settings have been saved successfully.',
         });
-        router.refresh(); // This will re-fetch initialSettings for the page through server component
-        form.reset({ ...data, adminPassword: '' }); // Clear password field after successful save
+        router.refresh(); 
+        form.reset({ ...data, adminPassword: '' }); 
       } else {
+        let toastDescription = result?.message || 'An unknown error occurred.';
+        
+        if (result?.errors) {
+          const fieldErrorEntries = Object.entries(result.errors);
+          if (fieldErrorEntries.length > 0) {
+            // Populate field errors onto the form
+            fieldErrorEntries.forEach(([fieldName, errors]) => {
+              if (Array.isArray(errors) && errors.length > 0) {
+                form.setError(fieldName as keyof SiteSettingsFormValues, { type: 'server', message: errors.join(', ') });
+              }
+            });
+
+            // Enhance toast message
+            if (fieldErrorEntries.length === 1 && fieldErrorEntries[0][1] && fieldErrorEntries[0][1].length > 0) {
+              // If only one field has an error, use its first message for the toast
+              toastDescription = fieldErrorEntries[0][1][0];
+            } else {
+              // If multiple fields have errors, provide a more general message for the toast
+              const errorFieldsSummary = fieldErrorEntries.map(entry => entry[0]).slice(0, 2).join(', ');
+              toastDescription = `Validation failed for fields like ${errorFieldsSummary}${fieldErrorEntries.length > 2 ? '...' : ''}.`;
+            }
+          }
+        }
+
         toast({
           variant: "destructive",
           title: 'Update Failed',
-          description: (result?.message || 'An unknown error occurred.') + "\nPlease check the form fields for specific error messages.",
+          description: `${toastDescription} Please review the form for specific details.`,
         });
-        if (result?.errors) {
-          Object.entries(result.errors).forEach(([fieldName, errors]) => {
-            if (Array.isArray(errors) && errors.length > 0) {
-              form.setError(fieldName as keyof SiteSettingsFormValues, { type: 'server', message: errors.join(', ') });
-            }
-          });
-        }
       }
     } catch (error: any) {
       console.error("Error updating site settings:", error);
@@ -419,3 +422,4 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     </Card>
   );
 }
+
