@@ -72,7 +72,6 @@ export default function NewPostPage() {
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingError, setScrapingError] = useState<string | null>(null);
   
-  const [externalScrapedThumbnailUrl, setExternalScrapedThumbnailUrl] = useState<string | null>(null);
   const [isDownloadingScrapedThumbnail, setIsDownloadingScrapedThumbnail] = useState(false);
 
 
@@ -102,7 +101,6 @@ export default function NewPostPage() {
   }, [watchedTitle, form]);
 
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setExternalScrapedThumbnailUrl(null); // Clear any pending external URL if user uploads manually
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -131,36 +129,47 @@ export default function NewPostPage() {
     }
   };
 
-  const handleDownloadAndUseScrapedThumbnail = async () => {
-    if (!externalScrapedThumbnailUrl) return;
-
+  const autoDownloadAndSetThumbnail = async (imageUrl: string) => {
     setIsDownloadingScrapedThumbnail(true);
-    toast({ title: "Downloading Image...", description: "Attempting to download the scraped thumbnail." });
+    toast({ title: "Processing Scraped Image...", description: "Attempting to automatically use the found thumbnail." });
 
     try {
-      const response = await fetch(externalScrapedThumbnailUrl);
+      const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
       }
       const blob = await response.blob();
-      const fileName = externalScrapedThumbnailUrl.substring(externalScrapedThumbnailUrl.lastIndexOf('/') + 1) || 'scraped-thumbnail.png';
-      const file = new File([blob], fileName, { type: blob.type });
+      const fileName = imageUrl.substring(imageUrl.lastIndexOf('/') + 1) || 'scraped-thumbnail.png';
+      // Try to infer extension from blob type or filename, default to .png
+      let ext = blob.type.split('/')[1] || fileName.split('.').pop() || 'png';
+      if (ext.includes('jpeg')) ext = 'jpg'; // normalize jpeg
+      const finalFileName = `${fileName.split('.').slice(0, -1).join('.') || 'scraped-thumbnail'}.${ext}`;
+
+      const file = new File([blob], finalFileName, { type: blob.type });
+
+      if (file.size > MAX_THUMBNAIL_SIZE_BYTES) {
+        toast({
+          variant: "default",
+          title: "Large Scraped Image",
+          description: `The scraped image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. It has been prepared for upload, but consider optimizing it if possible.`,
+          duration: 8000,
+        });
+      }
 
       setThumbnailFile(file);
       setThumbnailPreview(URL.createObjectURL(file));
-      setExternalScrapedThumbnailUrl(null); // Clear after successful download and set
       
-      // Clear the actual file input element's displayed name
       const fileInput = document.getElementById('thumbnail-upload') as HTMLInputElement | null;
       if (fileInput) {
-          fileInput.value = '';
+          fileInput.value = ''; // Clear display name of file input
       }
 
-      toast({ title: "Image Downloaded", description: "The scraped thumbnail has been prepared for upload." });
+      toast({ title: "Scraped Thumbnail Ready", description: "The found thumbnail has been prepared for upload. You can override it by selecting another file." });
     } catch (error: any) {
-      console.error("Error downloading scraped thumbnail:", error);
-      toast({ variant: "destructive", title: "Download Failed", description: `Could not download the image: ${error.message}. Please upload manually.` });
-      // Keep externalScrapedThumbnailUrl so user can see the preview or try again, or upload manually
+      console.error("Error auto-downloading scraped thumbnail:", error);
+      setThumbnailFile(null);
+      setThumbnailPreview('https://placehold.co/128x128.png?text=Auto-DL+Failed');
+      toast({ variant: "destructive", title: "Auto Thumbnail Failed", description: `Could not automatically use the scraped image: ${error.message}. Please upload one manually.` });
     } finally {
       setIsDownloadingScrapedThumbnail(false);
     }
@@ -222,7 +231,6 @@ export default function NewPostPage() {
     setScrapingError(null);
     setThumbnailFile(null); 
     setThumbnailPreview(null); 
-    setExternalScrapedThumbnailUrl(null);
   
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
@@ -312,21 +320,15 @@ export default function NewPostPage() {
         }
       }
       
+      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
+      
       if (scrapedData.thumbnailUrl) {
-        setThumbnailPreview(scrapedData.thumbnailUrl); // Preview external URL
-        setExternalScrapedThumbnailUrl(scrapedData.thumbnailUrl); // Store for potential download
-        toast({ 
-          title: "Thumbnail Found", 
-          description: "A thumbnail was found and is previewed. Click 'Download & Use Image' below the preview to prepare it for upload, or upload a different image manually.",
-          duration: 10000 
-        });
+        await autoDownloadAndSetThumbnail(scrapedData.thumbnailUrl);
       } else {
-         setThumbnailPreview(`https://placehold.co/600x400.png?text=No+Image+Found`);
-         toast({ title: "No Thumbnail Found", description: "A specific featured image could not be identified from the URL. You can manually upload one.", duration: 7000 });
+         setThumbnailPreview(`https://placehold.co/128x128.png?text=No+Image+Found`); // Smaller placeholder if no image found
+         toast({ title: "No Thumbnail Found", description: "A featured image could not be identified from the URL. You can manually upload one.", duration: 7000 });
       }
   
-      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
-
     } catch (error: any) { 
       console.error("Error calling /api/scrape:", error);
       const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again. If the problem persists, check server logs for /api/scrape.`;
@@ -385,7 +387,6 @@ export default function NewPostPage() {
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
-        setExternalScrapedThumbnailUrl(null);
         setSuggestedAiTags([]);
         setAiTagsError(null);
         setScrapeUrl(''); 
@@ -571,25 +572,11 @@ export default function NewPostPage() {
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block relative group">
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
-                   {externalScrapedThumbnailUrl && thumbnailPreview.startsWith('http') && (
-                     <Button
-                       type="button"
-                       size="sm"
-                       variant="outline"
-                       onClick={handleDownloadAndUseScrapedThumbnail}
-                       disabled={isDownloadingScrapedThumbnail || isSubmittingForm}
-                       className="absolute bottom-1 right-1 opacity-80 group-hover:opacity-100 transition-opacity text-xs p-1.5 h-auto"
-                     >
-                       {isDownloadingScrapedThumbnail ? <Loader2Icon className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                       <span className="ml-1">Use</span>
-                     </Button>
-                   )}
                 </div>
               )}
               <FormDescription>
-                {externalScrapedThumbnailUrl 
-                  ? "A thumbnail was found from the URL. Click 'Use' on the preview to download and prepare it for upload, or manually select a different image file."
-                  : "Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under 5MB)."}
+                If content was imported from a URL and an image was found, an attempt was made to use it.
+                You can always override by selecting a different image file. Use optimized images (under {MAX_THUMBNAIL_SIZE_MB}MB).
               </FormDescription>
             </FormItem>
 
@@ -722,4 +709,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
