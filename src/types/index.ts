@@ -23,6 +23,13 @@ export interface SiteSettings {
   // Global Footer Scripts
   globalFooterScriptsEnabled?: boolean;
   globalFooterScriptsCustomHtml?: string;
+  // Banner Ad Settings
+  bannerEnabled?: boolean;
+  bannerType?: 'image' | 'customHtml';
+  bannerImageUrl?: string;
+  bannerImageLink?: string;
+  bannerImageAltText?: string;
+  bannerCustomHtml?: string;
 }
 
 export interface Comment {

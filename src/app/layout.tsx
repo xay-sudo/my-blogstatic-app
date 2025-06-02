@@ -9,6 +9,7 @@ import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import HeadScriptInjector from '@/components/HeadScriptInjector';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
+import BannerAd from '@/components/BannerAd'; // Import the new BannerAd component
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -30,9 +31,6 @@ export default async function RootLayout({
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const isAdminLoggedIn = !!sessionCookie && sessionCookie.value === 'true';
 
-  // The <html> tag will not have 'dark' class set here initially.
-  // ThemeProvider's useEffect will handle adding it client-side.
-  // suppressHydrationWarning is important here for the class attribute.
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -46,6 +44,7 @@ export default async function RootLayout({
       <body className="font-body antialiased min-h-screen flex flex-col bg-background text-foreground">
         <ThemeProvider storageKey="newstoday-theme" defaultTheme="light">
           <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
+          <BannerAd settings={settings} /> {/* Banner Ad placed here */}
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}
           </main>
