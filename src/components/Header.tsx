@@ -26,13 +26,10 @@ function SearchBarFallback() {
 
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   const renderHeaderAdSlot = useCallback(() => {
-    // If admin is logged in AND the banner is enabled via settings,
-    // then we show nothing instead of the actual ad or the "Hidden for Admin" placeholder.
     if (isAdminLoggedIn && siteSettings && siteSettings.bannerEnabled) {
       return null; 
     }
 
-    // Loading state for siteSettings (applies to all users if settings are loading)
     if (!siteSettings) {
       return (
         <Skeleton
@@ -45,8 +42,6 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       );
     }
 
-    // If banner is not enabled in settings (applies to both admin and regular users)
-    // This shows the generic "Header Ad Slot (728x90)" placeholder.
     if (!siteSettings.bannerEnabled) {
       return (
         <div
@@ -58,10 +53,6 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
         </div>
       );
     }
-
-    // --- Banner is enabled and user is NOT admin (or siteSettings hasn't loaded, covered above) ---
-    // At this point, banner IS enabled (from siteSettings) and user is NOT admin.
-    // Or, admin is logged in but banner was disabled (covered by the previous !siteSettings.bannerEnabled block).
 
     if (siteSettings.bannerType === 'image' && siteSettings.bannerImageUrl) {
       const bannerContent = (
@@ -85,18 +76,16 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       return bannerContent;
     }
 
-    if (siteSettings.bannerType === 'customHtml' && siteSettings.bannerCustomHtml) {
+    if (siteSettings.bannerType === 'customHtml' && siteSettings.bannerCustomHtml && siteSettings.bannerCustomHtml.trim() !== '') {
       return (
         <RenderHtmlContent
           htmlString={siteSettings.bannerCustomHtml}
-          className="w-full max-w-[728px] h-[90px] flex items-center justify-center"
+          className="w-full max-w-[728px] h-[90px]" // Removed flex items-center justify-center
           placeholderStyle={{ width: '728px', height: '90px', minHeight: '90px' }}
         />
       );
     }
 
-    // Fallback if banner is enabled but misconfigured (e.g., image type selected but no URL)
-    // This applies to regular users, or admins if banner is enabled but misconfigured.
     return (
       <div
         style={{ width: '728px', height: '90px', minHeight: '90px' }}
