@@ -318,6 +318,7 @@ export async function deletePostAction(postId: string) {
   }
 }
 
+// Simplified Zod schema for basic field validation on the server
 const siteSettingsSchema = z.object({
   siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100),
   siteDescription: z.string().min(10, { message: 'Site description must be at least 10 characters long.' }).max(300),
@@ -328,25 +329,24 @@ const siteSettingsSchema = z.object({
   bannerImageLink: z.string().url({ message: 'Please enter a valid URL for the banner link.' }).optional().or(z.literal('')),
   bannerImageAltText: z.string().max(120, {message: 'Alt text should be 120 characters or less.'}).optional(),
   bannerCustomHtml: z.string().optional(),
-  adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
-  adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
-}).superRefine((data, ctx) => {
-  const usernameProvided = data.adminUsername && data.adminUsername.length > 0;
-  const passwordProvided = data.adminPassword && data.adminPassword.length > 0;
-
-  if (usernameProvided !== passwordProvided) {
-    if (usernameProvided && !passwordProvided) {
+  adminUsername: z.string().max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')), // Min length check handled in custom logic
+  adminPassword: z.string().max(100, {message: "Admin password must be 100 characters or less."}).optional(), // Min length (if set) handled in custom logic
+}).superRefine((data, ctx) => { // This superRefine is now only for banner logic
+  if (data.bannerEnabled && data.bannerType === 'image') {
+    if (!data.bannerImageUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Password is required if username is set.",
-        path: ['adminPassword'],
+        message: 'Image URL is required when image banner is enabled.',
+        path: ['bannerImageUrl'],
       });
     }
-    if (passwordProvided && !usernameProvided) {
-       ctx.addIssue({
+  }
+  if (data.bannerEnabled && data.bannerType === 'customHtml') {
+    if (!data.bannerCustomHtml || data.bannerCustomHtml.trim() === '') {
+      ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Username is required if password is set.",
-        path: ['adminUsername'],
+        message: 'Custom HTML is required when HTML banner is enabled.',
+        path: ['bannerCustomHtml'],
       });
     }
   }
@@ -371,11 +371,56 @@ export async function updateSiteSettingsAction(formData: FormData) {
   const validation = siteSettingsSchema.safeParse(rawData);
 
   if (!validation.success) {
-    console.error('Server-side validation failed (site settings):', validation.error.flatten().fieldErrors);
+    console.error('Server-side Zod validation failed (site settings):', validation.error.flatten().fieldErrors);
     return {
       success: false,
       message: "Validation failed. Check server logs for details.",
       errors: validation.error.flatten().fieldErrors,
+    };
+  }
+
+  // Custom validation for admin credentials
+  const currentSettings = await settingsService.getSettings();
+  const formUsername = (validation.data.adminUsername || "").trim();
+  const formPassword = validation.data.adminPassword || ""; // Will be empty string if not provided or blank
+
+  const credentialErrors: { adminUsername?: string[]; adminPassword?: string[] } = {};
+
+  if (formUsername) {
+    if (formUsername.length < 3) {
+        credentialErrors.adminUsername = ["Admin username must be at least 3 characters."];
+    }
+    // Check password requirements if username is set
+    const isNewUsername = !currentSettings.adminUsername;
+    const usernameChanged = formUsername !== currentSettings.adminUsername;
+
+    if (isNewUsername || usernameChanged) {
+      // If username is new or changed, a new password is required
+      if (formPassword.length === 0) {
+        credentialErrors.adminPassword = ["A new password is required when setting or changing the username."];
+      } else if (formPassword.length < 6) {
+        credentialErrors.adminPassword = ["Admin password must be at least 6 characters."];
+      }
+    } else {
+      // Username is the same, and an old password might exist
+      if (formPassword.length > 0 && formPassword.length < 6) {
+        // If user entered a new password, it must meet length criteria
+        credentialErrors.adminPassword = ["Admin password must be at least 6 characters."];
+      }
+      // If formPassword is empty here, it means "keep current password", which is valid.
+    }
+  } else {
+    // Username is being cleared
+    if (formPassword.length > 0) {
+      credentialErrors.adminUsername = ["Username cannot be empty if providing a password. To clear admin access, leave both username and password fields empty."];
+    }
+  }
+  
+  if (Object.keys(credentialErrors).length > 0) {
+    return {
+      success: false,
+      message: "Admin credentials validation failed.",
+      errors: credentialErrors,
     };
   }
 
@@ -390,9 +435,23 @@ export async function updateSiteSettingsAction(formData: FormData) {
       bannerImageLink: validation.data.bannerImageLink,
       bannerImageAltText: validation.data.bannerImageAltText,
       bannerCustomHtml: validation.data.bannerCustomHtml,
-      adminUsername: validation.data.adminUsername,
-      adminPassword: validation.data.adminPassword,
+      adminUsername: formUsername, // This will be an empty string if cleared
     };
+
+    // Logic for handling password update or retention
+    if (formPassword.length > 0) {
+      settingsToUpdate.adminPassword = formPassword; // Update to new password
+    } else if (!formUsername) {
+      settingsToUpdate.adminPassword = ""; // Clear password if username is also cleared
+    } else if (formUsername && formUsername === currentSettings.adminUsername && currentSettings.adminPassword) {
+      // Username is set, matches current, password field on form is blank, and old password exists
+      // In this case, we do *not* include adminPassword in settingsToUpdate, so service layer keeps the old one.
+    } else if (formUsername && (!currentSettings.adminPassword || formUsername !== currentSettings.adminUsername) && formPassword.length === 0) {
+      // Username is set, but either no old password existed or username changed, and form password is blank
+      // This case should have been caught by credentialErrors above. If somehow missed, ensure password is set to empty.
+       settingsToUpdate.adminPassword = "";
+    }
+
 
     await settingsService.updateSettings(settingsToUpdate);
     revalidatePath('/');
