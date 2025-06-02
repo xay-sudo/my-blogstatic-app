@@ -49,10 +49,24 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
   const storagePath = `posts_thumbnails/${filename}`;
   const fileRef = ref(storage, storagePath);
 
-  await uploadBytes(fileRef, file);
-  const downloadURL = await getDownloadURL(fileRef);
-  
-  return downloadURL;
+  try {
+    await uploadBytes(fileRef, file);
+    const downloadURL = await getDownloadURL(fileRef);
+    return downloadURL;
+  } catch (error: any) {
+    console.error("Firebase Storage Upload Error details:", error);
+    if (error.code) {
+      console.error("Firebase Storage Error Code:", error.code);
+    }
+    if (error.message) {
+      console.error("Firebase Storage Error Message:", error.message);
+    }
+    if (error.serverResponse) {
+      console.error("Firebase Storage Server Response:", error.serverResponse);
+    }
+    // Re-throw a more informative error
+    throw new Error(`Firebase Storage: ${error.message || 'An unknown error occurred during upload.'} (Code: ${error.code || 'unknown'}). Please check server logs and Firebase Storage rules.`);
+  }
 }
 
 async function deleteFileFromFirebaseStorage(downloadUrl: string | undefined) {
@@ -285,3 +299,4 @@ export async function updateSiteSettingsAction(formData: FormData) {
     };
   }
 }
+
