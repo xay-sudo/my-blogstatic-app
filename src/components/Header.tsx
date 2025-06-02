@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import SearchBar from './SearchBar'; // SearchBar will be created later, state managed by page
+import { ShieldCheck } from 'lucide-react'; 
 
 export default function Header() {
   return (
@@ -8,7 +8,12 @@ export default function Header() {
         <Link href="/" className="text-3xl font-headline text-primary hover:opacity-80 transition-opacity">
           Blogstatic
         </Link>
-        {/* Search bar might be moved to page level for state management */}
+        <nav>
+          <Link href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center">
+            <ShieldCheck className="w-4 h-4 mr-1" />
+            Admin
+          </Link>
+        </nav>
       </div>
     </header>
   );
