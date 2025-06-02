@@ -189,27 +189,15 @@ export async function createPostAction(formData: FormData) {
     await postService.addPost(postData);
 
   } catch (error: any) {
-    console.error('Failed to create post (in action):', error);
+    console.error('Failed to create post (in action):', error); // Log the original error
     let detailedErrorMessage = 'Could not create post.';
 
     if (error instanceof Error && error.message) {
-        detailedErrorMessage = error.message;
-        // Check if the message is the generic one with " {}"
-        if (error.message.endsWith("{}") || error.message === "Could not add post.") {
-            const errorString = JSON.stringify(error);
-            if (errorString !== '{}' && !error.message.includes(errorString)) {
-                detailedErrorMessage = `Could not add post. Server error: ${errorString}`;
-            } else if (error.toString && error.toString() !== '[object Object]' && !error.message.includes(error.toString())) {
-                 detailedErrorMessage = `Could not add post. Server error: ${error.toString()}`;
-            } else {
-                detailedErrorMessage = "Could not add post. An unspecified error occurred. Check server logs.";
-            }
-        }
+        detailedErrorMessage = error.message; // Use the message from the service layer directly
     } else if (typeof error === 'string') {
         detailedErrorMessage = error;
     } else {
-        const errorString = JSON.stringify(error);
-        detailedErrorMessage = `Could not create post. Details: ${errorString === '{}' ? 'An unknown error structure was encountered. Check server logs.' : errorString }`;
+        detailedErrorMessage = 'An unexpected error occurred. Check server logs for details.';
     }
 
     if (thumbnailUrl) {
@@ -285,15 +273,14 @@ export async function updatePostAction(postId: string, formData: FormData) {
       };
     }
   } catch (error: any) {
-    console.error('Failed to update post:', error);
+    console.error('Failed to update post:', error); // Log the original error
     let detailedErrorMessage = 'Could not update post.';
      if (error instanceof Error && error.message) {
-        detailedErrorMessage = error.message;
+        detailedErrorMessage = error.message; // Use the message from the service layer directly
     } else if (typeof error === 'string') {
         detailedErrorMessage = error;
     } else {
-        const errorString = JSON.stringify(error);
-        detailedErrorMessage = `Could not update post. Details: ${errorString === '{}' ? 'An unknown error structure was encountered. Check server logs.' : errorString }`;
+        detailedErrorMessage = 'An unexpected error occurred. Check server logs for details.';
     }
 
     if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
@@ -472,5 +459,3 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
-
-    

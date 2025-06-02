@@ -26,7 +26,7 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!isValidHttpUrl(supabaseUrl)) {
+  if (!supabaseUrl || !isValidHttpUrl(supabaseUrl)) {
     throw new Error(`CRITICAL: NEXT_PUBLIC_SUPABASE_URL is invalid for admin client. Value: "${supabaseUrl}". Please check environment variables.`);
   }
   if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
@@ -49,7 +49,7 @@ async function seedInitialPostsFromJson() {
     const { count, error: countError } = await supabase.from('posts').select('*', { count: 'exact', head: true });
     if (countError) {
       console.warn('Could not check post count in DB for seeding:', JSON.stringify(countError, null, 2));
-      initialPostsDataLoaded = true; 
+      initialPostsDataLoaded = true;
       return;
     }
 
@@ -59,7 +59,7 @@ async function seedInitialPostsFromJson() {
       const postsFromFile = JSON.parse(jsonData) as Post[];
 
       const postsToInsert = postsFromFile.map(p => ({
-        id: p.id, 
+        id: p.id,
         slug: p.slug,
         title: p.title,
         date: p.date,
@@ -82,19 +82,19 @@ async function seedInitialPostsFromJson() {
       console.log('Posts table is not empty. Skipping seeding from JSON.');
     }
   } catch (error: any) {
-    if (error.code !== 'ENOENT') { 
+    if (error.code !== 'ENOENT') {
         console.warn('Could not read or parse posts.json for initial seeding:', error.message);
     } else {
         console.log('posts.json not found, skipping initial seeding.');
     }
   } finally {
-    initialPostsDataLoaded = true; 
+    initialPostsDataLoaded = true;
   }
 }
 
 
 export const getAllPosts = async (): Promise<Post[]> => {
-  await seedInitialPostsFromJson(); 
+  await seedInitialPostsFromJson();
 
   const { data, error } = await supabase
     .from('posts')
@@ -117,7 +117,7 @@ export const getPostBySlug = async (slug: string): Promise<Post | undefined> => 
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined; 
+    if (error.code === 'PGRST116') return undefined;
     console.error('Error fetching post by slug:', JSON.stringify(error, null, 2));
     return undefined;
   }
@@ -133,12 +133,26 @@ export const getPostById = async (id: string): Promise<Post | undefined> => {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined; 
+    if (error.code === 'PGRST116') return undefined;
     console.error('Error fetching post by ID:', JSON.stringify(error, null, 2));
     return undefined;
   }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
 };
+
+function formatSupabaseError(supabaseError: any): string {
+  if (!supabaseError) return "An unknown error occurred.";
+  // Prioritize more specific fields from Supabase error object
+  if (supabaseError.details) return supabaseError.details;
+  if (supabaseError.message && supabaseError.message !== "An error occurred" && supabaseError.message.trim() !== "" && supabaseError.message.trim() !== "{}") return supabaseError.message;
+  if (supabaseError.hint) return supabaseError.hint;
+
+  // Fallback for less specific or empty errors
+  const stringified = JSON.stringify(supabaseError);
+  if (stringified !== "{}") return `Database error: ${stringified}. Check server logs.`;
+
+  return "Supabase database operation failed. Check server logs for details.";
+}
 
 export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount'> & { viewCount?: number }): Promise<Post> => {
   const adminSupabase = getSupabaseAdminClient();
@@ -148,7 +162,7 @@ export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount
     content: newPostData.content,
     tags: newPostData.tags,
     thumbnail_url: newPostData.thumbnailUrl,
-    date: new Date().toISOString(), 
+    date: new Date().toISOString(),
     view_count: newPostData.viewCount || 0,
   };
 
@@ -159,8 +173,9 @@ export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount
     .single();
 
   if (error) {
-    console.error('Error adding post:', JSON.stringify(error, null, 2));
-    throw new Error('Could not add post. ' + (error.message || JSON.stringify(error)));
+    console.error('Error adding post (raw Supabase error):', JSON.stringify(error, null, 2));
+    const friendlyErrorMessage = formatSupabaseError(error);
+    throw new Error(`Could not add post. ${friendlyErrorMessage}`);
   }
   return { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post;
 };
@@ -174,9 +189,9 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
   if (updatedPostData.tags) postToUpdate.tags = updatedPostData.tags;
   if (updatedPostData.hasOwnProperty('thumbnailUrl')) postToUpdate.thumbnail_url = updatedPostData.thumbnailUrl;
   if (updatedPostData.viewCount !== undefined) postToUpdate.view_count = updatedPostData.viewCount;
-  
+
   if (Object.keys(postToUpdate).length === 0) {
-    return getPostById(postId); 
+    return getPostById(postId);
   }
 
   const { data, error } = await adminSupabase
@@ -187,8 +202,9 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
     .single();
 
   if (error) {
-    console.error('Error updating post:', JSON.stringify(error, null, 2));
-    throw new Error('Could not update post. ' + (error.message || JSON.stringify(error)));
+    console.error('Error updating post (raw Supabase error):', JSON.stringify(error, null, 2));
+    const friendlyErrorMessage = formatSupabaseError(error);
+    throw new Error(`Could not update post. ${friendlyErrorMessage}`);
   }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
 };
@@ -201,17 +217,19 @@ export const deletePostById = async (postId: string): Promise<void> => {
     .eq('id', postId);
 
   if (error) {
-    console.error('Error deleting post:', JSON.stringify(error, null, 2));
-    throw new Error('Could not delete post. ' + (error.message || JSON.stringify(error)));
+    console.error('Error deleting post (raw Supabase error):', JSON.stringify(error, null, 2));
+    const friendlyErrorMessage = formatSupabaseError(error);
+    throw new Error(`Could not delete post. ${friendlyErrorMessage}`);
   }
 };
 
 export const incrementViewCount = async (postId: string): Promise<void> => {
-  const adminSupabase = getSupabaseAdminClient(); 
+  const adminSupabase = getSupabaseAdminClient();
   const { error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
 
   if (error) {
-    console.error('Error incrementing view count:', JSON.stringify(error, null, 2));
+    // Not throwing an error here as it's a non-critical background operation for the user
+    console.error('Error incrementing view count (raw Supabase error):', JSON.stringify(error, null, 2));
   }
 };
 
