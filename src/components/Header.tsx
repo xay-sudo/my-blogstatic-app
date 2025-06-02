@@ -1,29 +1,53 @@
 
-'use client'; // Add this because we are using hooks
+'use client';
 
 import Link from 'next/link';
-import { ShieldCheck } from 'lucide-react'; 
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+// import { ShieldCheck } from 'lucide-react'; // Admin link removed for now
+// import { useAuth } from '@/contexts/AuthContext'; // Admin link removed for now
+import { useEffect, useState } from 'react';
 
 export default function Header() {
-  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Get auth status
+  // const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Kept for potential future re-add of admin link
+  const [currentDate, setCurrentDate] = useState('');
+
+  useEffect(() => {
+    setCurrentDate(new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }));
+  }, []);
 
   return (
-    <header className="bg-card border-b sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-        <Link href="/" className="text-3xl font-headline text-primary hover:opacity-80 transition-opacity">
-          Newstoday
-        </Link>
-        <nav>
-          {/* Only show Admin link if logged in and not loading */}
-          {!isLoadingAuth && isAdminLoggedIn && (
-            <Link href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center">
-              <ShieldCheck className="w-4 h-4 mr-1" />
-              Admin
-            </Link>
-          )}
-        </nav>
-      </div>
-    </header>
+    <>
+      {/* Top Date Bar */}
+      {currentDate && (
+        <div className="bg-muted/40 py-1 border-b border-muted">
+          <div className="container mx-auto px-4">
+            <p className="text-xs text-muted-foreground">{currentDate}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Header with Logo and Ad space */}
+      <header className="bg-card border-b">
+        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
+          {/* Logo */}
+          <Link href="/" className="text-4xl font-sans font-bold text-accent hover:opacity-80 transition-opacity">
+            newsfire
+          </Link>
+
+          {/* Ad Container - ad scripts from layout.tsx should target this or a similar area */}
+          <div className="mt-4 sm:mt-0 sm:ml-auto" aria-label="Advertisement Area">
+            {/* The ad script (invoke.js) will inject an iframe, often 728x90.
+                This div helps in layout and can be styled if the ad doesn't load.
+            */}
+            <div style={{ width: '728px', height: '90px' }} className="flex items-center justify-center bg-muted/10 text-xs text-muted-foreground">
+              {/* Ad content will be injected here by external script */}
+            </div>
+          </div>
+        </div>
+      </header>
+    </>
   );
 }
