@@ -4,8 +4,7 @@ import * as postService from '@/lib/post-service';
 import { getSettings } from '@/lib/settings-service';
 import PostCard from '@/components/PostCard';
 import PaginationControlsClient from '@/components/PaginationControlsClient'; 
-import SearchBarClient from '@/components/SearchBarClient'; 
-// Image and RenderHtmlContent are no longer needed here for the banner
+// SearchBarClient is no longer needed here as it's only in the Header now
 
 interface HomePageProps {
   searchParams?: {
@@ -37,15 +36,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
-  // Banner rendering logic is moved to Header.tsx
-
   if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
-          {/* Banner div removed from here, handled by Header.tsx */}
-          <div className="flex justify-end"> {/* Changed from justify-start to justify-end */}
-             <SearchBarClient initialSearchTerm={searchTerm} />
-          </div>
+          {/* SearchBarClient removed from here */}
           <p className="text-center text-muted-foreground text-xl py-10">
             No posts have been created yet.
           </p>
@@ -55,11 +49,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="space-y-12">
-      {/* Banner div removed from here, handled by Header.tsx */}
-
-      <div className="flex justify-end"> {/* Changed from justify-start to justify-end */}
-        <SearchBarClient initialSearchTerm={searchTerm} />
-      </div>
+      {/* SearchBarClient and its wrapper div removed from here */}
 
       {paginatedPosts.length === 0 && searchTerm && (
         <p className="text-center text-muted-foreground text-xl py-10">
@@ -83,4 +73,3 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     </div>
   );
 }
-
