@@ -7,7 +7,7 @@ import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { Suspense, useCallback } from 'react'; // Added useCallback
+import React, { Suspense, useCallback } from 'react'; 
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -26,18 +26,13 @@ function SearchBarFallback() {
 
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   const renderHeaderAdSlot = useCallback(() => {
-    if (isAdminLoggedIn) {
-      return (
-        <div
-          style={{ width: '728px', height: '90px' }}
-          className="bg-muted/10 border border-dashed border-border/50 flex items-center justify-center text-xs text-muted-foreground/70"
-          data-ai-hint="advertisement banner admin-hidden"
-        >
-          Ad Slot (Hidden for Admin)
-        </div>
-      );
+    // If admin is logged in AND the banner is enabled via settings,
+    // then we show nothing instead of the actual ad or the "Hidden for Admin" placeholder.
+    if (isAdminLoggedIn && siteSettings && siteSettings.bannerEnabled) {
+      return null; 
     }
 
+    // Loading state for siteSettings (applies to all users if settings are loading)
     if (!siteSettings) {
       return (
         <Skeleton
@@ -50,6 +45,8 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       );
     }
 
+    // If banner is not enabled in settings (applies to both admin and regular users)
+    // This shows the generic "Header Ad Slot (728x90)" placeholder.
     if (!siteSettings.bannerEnabled) {
       return (
         <div
@@ -61,6 +58,10 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
         </div>
       );
     }
+
+    // --- Banner is enabled and user is NOT admin (or siteSettings hasn't loaded, covered above) ---
+    // At this point, banner IS enabled (from siteSettings) and user is NOT admin.
+    // Or, admin is logged in but banner was disabled (covered by the previous !siteSettings.bannerEnabled block).
 
     if (siteSettings.bannerType === 'image' && siteSettings.bannerImageUrl) {
       const bannerContent = (
@@ -94,6 +95,8 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       );
     }
 
+    // Fallback if banner is enabled but misconfigured (e.g., image type selected but no URL)
+    // This applies to regular users, or admins if banner is enabled but misconfigured.
     return (
       <div
         style={{ width: '728px', height: '90px', minHeight: '90px' }}
