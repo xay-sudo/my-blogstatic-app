@@ -37,13 +37,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
-  // Banner rendering logic is removed from here
+  // Banner rendering logic is moved to Header.tsx
 
   if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
-          {/* Banner div removed from here */}
-          <div className="flex justify-center">
+          {/* Banner div removed from here, handled by Header.tsx */}
+          <div className="flex justify-start"> {/* Changed from justify-center */}
              <SearchBarClient initialSearchTerm={searchTerm} />
           </div>
           <p className="text-center text-muted-foreground text-xl py-10">
@@ -55,9 +55,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="space-y-12">
-      {/* Banner div removed from here */}
+      {/* Banner div removed from here, handled by Header.tsx */}
 
-      <div className="flex justify-center">
+      <div className="flex justify-start"> {/* Changed from justify-center */}
         <SearchBarClient initialSearchTerm={searchTerm} />
       </div>
 
