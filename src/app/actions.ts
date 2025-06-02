@@ -8,25 +8,40 @@ import * as settingsService from '@/lib/settings-service';
 import type { Post, SiteSettings } from '@/types';
 import * as z from 'zod';
 import { cookies } from 'next/headers';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'; // Import createClient
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const SUPABASE_BUCKET_NAME = 'post-thumbnails';
 
+// Helper function to validate HTTP/HTTPS URL format
+function isValidHttpUrl(string: string | undefined): boolean {
+  if (!string) return false;
+  let url;
+  try {
+    url = new URL(string);
+  } catch (_) {
+    return false;
+  }
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
 // Helper function to create a Supabase admin client (uses service_role key)
-// This should only be used in server-side actions.
 function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error('Supabase URL or Service Role Key is not configured for admin actions.');
+  if (!supabaseUrl) {
+    throw new Error('Supabase URL (NEXT_PUBLIC_SUPABASE_URL) is not configured for admin actions.');
+  }
+  if (!supabaseServiceRoleKey) {
+    throw new Error('Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) is not configured for admin actions.');
+  }
+  if (!isValidHttpUrl(supabaseUrl)) {
+    throw new Error(`Invalid Supabase URL format: "${supabaseUrl}". Please check NEXT_PUBLIC_SUPABASE_URL.`);
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
-      // Important: By default, the service role key bypasses RLS.
-      // autoRefreshToken and persistSession are not typically needed for service roles.
       autoRefreshToken: false,
       persistSession: false,
       detectSessionInUrl: false
@@ -35,12 +50,18 @@ function getSupabaseAdminClient(): SupabaseClient {
 }
 
 // Helper function to get the public Supabase client (uses anon key)
-// This is safe for constructing public URLs.
 function getSupabasePublicClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase URL or Anon Key is not configured for public client.');
+
+  if (!supabaseUrl) {
+    throw new Error('Supabase URL (NEXT_PUBLIC_SUPABASE_URL) is not configured for public client.');
+  }
+  if (!supabaseAnonKey) {
+    throw new Error('Supabase Anon Key (NEXT_PUBLIC_SUPABASE_ANON_KEY) is not configured for public client.');
+  }
+  if (!isValidHttpUrl(supabaseUrl)) {
+     throw new Error(`Invalid Supabase URL format: "${supabaseUrl}". Please check NEXT_PUBLIC_SUPABASE_URL.`);
   }
   return createClient(supabaseUrl, supabaseAnonKey);
 }
@@ -70,14 +91,14 @@ async function handleSupabaseFileUpload(file: File | undefined): Promise<string 
     throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
   }
 
-  const supabaseAdmin = getSupabaseAdminClient(); // Use admin client for upload
+  const supabaseAdmin = getSupabaseAdminClient(); 
 
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
   const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
   const sanitizedBaseName = (file.name.replace(/\.[^/.]+$/, "") || 'untitled').replace(/[^a-zA-Z0-9_.-]/g, '_');
   const filename = `${sanitizedBaseName}-${uniqueSuffix}${extension}`;
   
-  const filePathInBucket = `public/${filename}`; // Standard practice to put public files in a 'public/' prefix
+  const filePathInBucket = `public/${filename}`; 
 
   const { data, error } = await supabaseAdmin.storage
     .from(SUPABASE_BUCKET_NAME)
@@ -91,13 +112,11 @@ async function handleSupabaseFileUpload(file: File | undefined): Promise<string 
     throw new Error(`Could not upload file to cloud storage. Details: ${error.message}.`);
   }
 
-  // Construct the public URL using the public client
   const supabasePublic = getSupabasePublicClient();
   const { data: publicUrlData } = supabasePublic.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
   
   if (!publicUrlData || !publicUrlData.publicUrl) {
       console.error("Could not get public URL for Supabase file:", data.path);
-      // Attempt to delete the uploaded file if URL retrieval fails (use admin client)
       await supabaseAdmin.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]);
       throw new Error("File uploaded, but could not retrieve its public URL.");
   }
@@ -106,25 +125,27 @@ async function handleSupabaseFileUpload(file: File | undefined): Promise<string 
 }
 
 async function deleteSupabaseFile(fileUrl: string | undefined) {
-  if (!fileUrl) {
-    console.warn('No file URL provided for deletion from Supabase.');
+  if (!fileUrl || !isValidHttpUrl(fileUrl)) { // Added isValidHttpUrl check for fileUrl before parsing
+    console.warn('Invalid or no file URL provided for deletion from Supabase:', fileUrl);
     return;
   }
   
-  const supabaseAdmin = getSupabaseAdminClient(); // Use admin client for deletion
+  const supabaseAdmin = getSupabaseAdminClient();
 
   try {
-    const url = new URL(fileUrl);
+    const url = new URL(fileUrl); // This should be safe now due to the check above
     const pathParts = url.pathname.split('/');
+    // Find the bucket name in the path, and take everything after it.
+    // Example: /storage/v1/object/public/post-thumbnails/public/image.png
+    // We need "public/image.png"
+    let filePathInBucket = '';
     const bucketNameIndex = pathParts.indexOf(SUPABASE_BUCKET_NAME);
-    if (bucketNameIndex === -1 || bucketNameIndex + 1 >= pathParts.length) {
-        console.error('Could not parse file path from Supabase URL:', fileUrl);
-        return;
+    if (bucketNameIndex !== -1 && bucketNameIndex < pathParts.length -1) {
+        filePathInBucket = pathParts.slice(bucketNameIndex + 1).join('/');
     }
-    const filePathInBucket = pathParts.slice(bucketNameIndex + 1).join('/');
-
+    
     if (!filePathInBucket) {
-        console.error('Empty file path extracted from Supabase URL:', fileUrl);
+        console.error('Could not parse file path from Supabase URL for deletion:', fileUrl);
         return;
     }
 
@@ -138,7 +159,8 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
       console.log('Successfully deleted file from Supabase Storage (admin client):', filePathInBucket);
     }
   } catch (error: any) {
-    console.error('Error parsing or deleting Supabase file URL:', fileUrl, error.message);
+    // This catch is for the new URL(fileUrl) or other unexpected errors.
+    console.error('Error processing Supabase file URL for deletion:', fileUrl, error.message);
   }
 }
 
@@ -178,7 +200,11 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    if (thumbnailUrl) await deleteSupabaseFile(thumbnailUrl); 
+    // Attempt to clean up uploaded file if post creation failed *after* upload
+    if (thumbnailUrl) {
+        console.log('Attempting to delete uploaded thumbnail due to post creation error...');
+        await deleteSupabaseFile(thumbnailUrl);
+    }
     return {
       success: false,
       message: error.message || 'Could not create post.',
@@ -425,4 +451,3 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
-
