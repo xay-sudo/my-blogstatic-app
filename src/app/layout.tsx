@@ -1,6 +1,6 @@
 
 import type { Metadata } from 'next';
-import Script from 'next/script'; // Import next/script
+// import Script from 'next/script'; // No longer needed
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/Header';
@@ -28,23 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Added custom scripts - moved to top */}
-        <Script id="atoptions-config" strategy="beforeInteractive">
-          {`
-            atOptions = {
-              'key' : 'fff490176317327192fad7d937b02c1b',
-              'format' : 'iframe',
-              'height' : 90,
-              'width' : 728,
-              'params' : {}
-            };
-          `}
-        </Script>
-        <Script 
-          id="warningcanshipment-invoke"
-          src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"
-          strategy="afterInteractive" 
-        />
+        {/* Scripts removed from here */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,200..900;1,7..72,200..900&display=swap" rel="stylesheet" />
