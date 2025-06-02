@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 const postFormSchema = z.object({
@@ -46,6 +46,7 @@ export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
   const editorRef = useRef<any>(null);
+  const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postFormSchema),
@@ -54,7 +55,7 @@ export default function NewPostPage() {
       slug: '',
       excerpt: '',
       content: '<p>Write your blog post content here...</p>',
-      tags: [], 
+      tags: [],
       imageUrl: '',
     },
     mode: 'onChange',
@@ -67,8 +68,8 @@ export default function NewPostPage() {
       const newSlug = watchedTitle
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, '-') 
-        .replace(/[^\w-]+/g, '') 
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
         .replace(/--+/g, '-');
       form.setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
     }
@@ -76,7 +77,7 @@ export default function NewPostPage() {
 
 
   const onSubmit = (data: PostFormValues) => {
-    const finalTags = Array.isArray(data.tags) ? data.tags : 
+    const finalTags = Array.isArray(data.tags) ? data.tags :
                       (typeof data.tags === 'string' ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []);
 
     const newPostData = {
@@ -85,7 +86,7 @@ export default function NewPostPage() {
     };
 
     console.log('New post data (mock submission):', newPostData);
-    
+
     toast({
       title: 'Post Created (Mock)',
       description: `"${data.title}" has been "created". This is a mock operation.`,
@@ -158,6 +159,7 @@ export default function NewPostPage() {
                   <FormLabel>Content</FormLabel>
                   <FormControl>
                     <Editor
+                      apiKey={tinymceApiKey}
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
@@ -194,7 +196,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Tags</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
                       value={Array.isArray(field.value) ? field.value.join(', ') : (field.value || '')}
