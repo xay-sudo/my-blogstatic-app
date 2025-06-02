@@ -4,13 +4,19 @@
 import type { SiteSettings } from '@/types';
 import Image from 'next/image';
 import Link from 'next/link';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface BannerAdProps {
   settings: SiteSettings | null;
 }
 
 const BannerAd: React.FC<BannerAdProps> = ({ settings }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   if (!settings || !settings.bannerEnabled) {
     return null;
   }
@@ -30,11 +36,17 @@ const BannerAd: React.FC<BannerAdProps> = ({ settings }) => {
           />
         </Link>
       )}
-      {settings.bannerType === 'customHtml' && settings.bannerCustomHtml && (
+      {settings.bannerType === 'customHtml' && settings.bannerCustomHtml && mounted && (
         <div
           dangerouslySetInnerHTML={{ __html: settings.bannerCustomHtml }}
           className="w-full flex justify-center" // Ensure the div takes space and centers content
         />
+      )}
+      {/* Render a placeholder or nothing if customHTML and not yet mounted to avoid hydration mismatch */}
+      {settings.bannerType === 'customHtml' && settings.bannerCustomHtml && !mounted && (
+        <div className="w-full flex justify-center" style={{ minHeight: '90px' }}> {/* Placeholder to maintain layout space */}
+            {/* Intentionally empty or a subtle loader if preferred, to be replaced by client-side render */}
+        </div>
       )}
     </div>
   );
