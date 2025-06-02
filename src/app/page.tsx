@@ -22,6 +22,10 @@ function HomePageLoadingSkeleton() {
   const DEFAULT_POSTS_SKELETON = 6;
   return (
     <div className="space-y-8">
+      <div className="flex justify-center mb-8">
+        {/* Placeholder for banner in skeleton */}
+        <Skeleton className="h-[90px] w-full max-w-[728px]" />
+      </div>
       <div className="flex justify-center mb-12">
         <Skeleton className="h-10 w-full max-w-md" />
       </div>
@@ -72,6 +76,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
+          {/* Banner Section */}
+          <div className="flex justify-center">
+            <div 
+              style={{ width: '728px', height: '90px' }} 
+              className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground"
+              aria-label="Homepage Banner Area"
+            >
+              Homepage Banner (728x90)
+            </div>
+          </div>
           <div className="flex justify-center">
              <SearchBarClient initialSearchTerm={searchTerm} />
           </div>
@@ -85,6 +99,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="space-y-12">
+      {/* Banner Section */}
+      <div className="flex justify-center">
+        <div 
+          style={{ width: '728px', height: '90px' }} 
+          className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground"
+          aria-label="Homepage Banner Area"
+        >
+          Homepage Banner (728x90)
+        </div>
+      </div>
+
       <div className="flex justify-center">
         <SearchBarClient initialSearchTerm={searchTerm} />
       </div>
