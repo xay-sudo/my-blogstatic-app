@@ -21,19 +21,15 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-// Progress component might not be needed if not doing live client-side upload progress to Firebase
-// import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle } from 'lucide-react';
-// Firebase storage imports are no longer needed here
-// import { storage } from '@/lib/firebase-config';
-// import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-// import { useAuth } from '@/contexts/AuthContext'; // Only needed if you restrict by user for local uploads, not for now
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud } from 'lucide-react';
 import { createPostAction } from '@/app/actions';
-import type { Post } from '@/types'; // Keep for Post type if needed elsewhere, but payload to action changes
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Separator } from '@/components/ui/separator';
+
 
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
@@ -41,31 +37,31 @@ const postFormClientSchema = z.object({
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
-  tags: z.string().optional(), // Tags are sent as a comma-separated string
-  // thumbnailUrl is handled by file upload, not a direct form field string for URL
+  tags: z.string().optional(),
 });
 
 type PostFormClientValues = z.infer<typeof postFormClientSchema>;
 
-const MAX_THUMBNAIL_SIZE_MB = 5; // Max size for client-side warning
+const MAX_THUMBNAIL_SIZE_MB = 5;
 const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
-  // const { user } = useAuth(); // Not directly used for local file saving path here
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  // const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({}); // Firebase specific
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
-  // const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false); // Firebase specific
 
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [aiTagsError, setAiTagsError] = useState<string | null>(null);
+
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapingError, setScrapingError] = useState<string | null>(null);
 
 
   const form = useForm<PostFormClientValues>({
@@ -113,7 +109,6 @@ export default function NewPostPage() {
         setThumbnailPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      // No auto-upload here for local storage, file is sent with form
     } else {
       setThumbnailFile(null);
       setThumbnailPreview(null);
@@ -169,6 +164,88 @@ export default function NewPostPage() {
     }
   };
 
+  const handleFetchContentFromUrl = async () => {
+    if (!scrapeUrl) {
+      toast({ variant: "destructive", title: "Error", description: "Please enter a URL to fetch content from." });
+      return;
+    }
+    setIsScraping(true);
+    setScrapingError(null);
+  
+    // --- Placeholder for Firebase Cloud Function Call ---
+    // In a real implementation, you would call your Firebase Cloud Function here.
+    // This requires setting up Firebase SDK for functions if not already done.
+    // Example:
+    // try {
+    //   // Ensure you have Firebase initialized and functions imported:
+    //   // import { getFunctions, httpsCallable } from 'firebase/functions';
+    //   // import { app } from '@/lib/firebase-config'; // Your Firebase app instance
+    //   // const functions = getFunctions(app);
+    //   // const scrapePostFunction = httpsCallable(functions, 'yourScrapeFunctionName'); // Replace 'yourScrapeFunctionName'
+    //   
+    //   // const result = await scrapePostFunction({ url: scrapeUrl });
+    //   // const scrapedData = result.data as { title?: string; content?: string; slug?: string; thumbnailUrl?: string /* and other fields */ };
+    //   
+    //   // if (scrapedData.title) form.setValue('title', scrapedData.title);
+    //   // if (scrapedData.content) {
+    //   //   form.setValue('content', scrapedData.content);
+    //   //   if (editorRef.current) editorRef.current.setContent(scrapedData.content);
+    //   // }
+    //   // if (scrapedData.slug) form.setValue('slug', scrapedData.slug);
+    //   // else if (scrapedData.title) { /* auto-generate slug from title if no slug provided */ }
+    //   
+    //   // // Handling thumbnail is more complex:
+    //   // // You might get a URL. You could display it and let user confirm,
+    //   // // or try to download it client-side (hard) or server-side via another function,
+    //   // // then set it to thumbnailFile and thumbnailPreview.
+    //   // if (scrapedData.thumbnailUrl) {
+    //   //    console.log("Scraped thumbnail URL:", scrapedData.thumbnailUrl);
+    //   //    setThumbnailPreview(scrapedData.thumbnailUrl); // This only sets preview if it's a direct image URL
+    //   //    // To actually use it as the uploaded file, you'd need to fetch it as a blob
+    //   //    // then create a File object and setThumbnailFile. This is an advanced step.
+    //   //    toast({ title: "Thumbnail Info", description: "A thumbnail URL was found. Review and select manually if needed."});
+    //   // }
+    //   
+    //   // toast({ title: "Content Fetched", description: "Form fields populated. Please review." });
+    // } catch (error: any) {
+    //   // console.error("Error scraping content:", error);
+    //   // setScrapingError(error.message || "Failed to scrape content from URL.");
+    //   // toast({ variant: "destructive", title: "Scraping Error", description: error.message || "Could not fetch content." });
+    // } finally {
+    //   // setIsScraping(false);
+    // }
+    // --- End Placeholder ---
+  
+    // Simulated delay and response for UI demonstration:
+    toast({ title: "Fetching Content (Simulated)", description: "This is a simulation. Implement your Cloud Function call." });
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    
+    const simulatedScrapedData = {
+      title: `Fetched: My Awesome Post from ${scrapeUrl.substring(0, Math.min(30, scrapeUrl.length))}${scrapeUrl.length > 30 ? '...' : ''}`,
+      content: `<p>This is some <strong>simulated scraped content</strong> from the URL you provided. It demonstrates how the form fields could be populated.</p><p>Your actual Cloud Function would parse the real website's HTML to extract meaningful title, article body, and potentially images.</p><ul><li>List Item 1</li><li>Another List Item</li></ul><p>Remember to replace this simulation with a real call to your Firebase Cloud Function.</p>`,
+      // slug: `fetched-post-${Date.now().toString().slice(-5)}` // Slug generation would be better handled based on title
+    };
+  
+    form.setValue('title', simulatedScrapedData.title, { shouldValidate: true, shouldDirty: true });
+    // The watchedTitle useEffect should auto-update the slug.
+    form.setValue('content', simulatedScrapedData.content, { shouldValidate: true, shouldDirty: true });
+    if (editorRef.current) {
+      editorRef.current.setContent(simulatedScrapedData.content);
+    }
+    
+    // For thumbnail, you would ideally get an image URL from scraper,
+    // then potentially fetch that image and set it to thumbnailFile & thumbnailPreview.
+    // For simulation, let's set a placeholder preview if one isn't already there.
+    if (!thumbnailPreview) {
+        setThumbnailPreview('https://placehold.co/600x400.png?text=Scraped+Preview');
+        // Note: This doesn't set thumbnailFile, so it won't be uploaded unless user selects one.
+    }
+
+    toast({ title: "Content Populated (Simulated)", description: "Form fields have been filled with simulated data. Please review and adjust as needed." });
+    setIsScraping(false);
+  };
+
+
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
         
@@ -187,14 +264,13 @@ export default function NewPostPage() {
     formData.append('title', data.title);
     formData.append('slug', data.slug);
     formData.append('content', data.content);
-    formData.append('tags', data.tags || ''); // Send as comma-separated string
+    formData.append('tags', data.tags || '');
 
     if (thumbnailFile) {
       formData.append('thumbnailFile', thumbnailFile);
     }
 
     try {
-      // @ts-ignore createPostAction expects FormData, but TS might not infer it well here
       const result = await createPostAction(formData); 
       if (result?.success === false) {
          toast({
@@ -217,9 +293,9 @@ export default function NewPostPage() {
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
-        // setUploadProgress({}); // Not needed for local
         setSuggestedAiTags([]);
         setAiTagsError(null);
+        setScrapeUrl(''); 
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
@@ -251,9 +327,109 @@ export default function NewPostPage() {
             </Link>
           </Button>
         </div>
-        <CardDescription>Fill in the details below to publish a new blog post.</CardDescription>
+        <CardDescription>Fill in the details below or import from a URL to publish a new blog post.</CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Scrape from URL Section */}
+        <div className="mb-8 p-4 border rounded-lg bg-muted/50">
+          <h3 className="text-lg font-semibold mb-3 flex items-center">
+            <Link2 className="w-5 h-5 mr-2 text-primary" />
+            Import Content from URL
+          </h3>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-2 items-end">
+              <div className="flex-grow">
+                <Label htmlFor="scrape-url" className="text-sm font-medium">Content URL</Label>
+                <Input
+                  id="scrape-url"
+                  type="url"
+                  placeholder="https://example.com/blog-post-to-scrape"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  disabled={isScraping || isSubmittingForm}
+                  className="mt-1"
+                />
+              </div>
+              <Button 
+                type="button" 
+                onClick={handleFetchContentFromUrl} 
+                disabled={isScraping || isSubmittingForm || !scrapeUrl}
+                className="w-full sm:w-auto"
+              >
+                {isScraping ? (
+                  <>
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    Fetching...
+                  </>
+                ) : (
+                  <>
+                   <DownloadCloud className="w-4 h-4 mr-2" />
+                    Get Content
+                  </>
+                )}
+              </Button>
+            </div>
+            {scrapingError && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{scrapingError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Placeholder scraping options */}
+            <div className="space-y-3 text-sm mt-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
+                <Label className="font-medium w-32 shrink-0">Feature Image:</Label>
+                <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-img-crop" className="font-normal">Crop</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-img-flip" className="font-normal">Flip</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-img-keep" className="font-normal">Keep Original</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
+                <Label className="font-medium w-32 shrink-0">White Space:</Label>
+                <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-ws-yes" className="font-normal">Remove</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-ws-keep" className="font-normal">Keep Original</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
+                <Label className="font-medium w-32 shrink-0">Random Img Order:</Label>
+                <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-rio-yes" className="font-normal">Yes</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm} />
+                    <Label htmlFor="scrape-rio-keep" className="font-normal">Keep Original</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm}>
+                 Set Content Rules (placeholder)
+              </Button>
+            </div>
+          </div>
+        </div>
+        <Separator className="my-6" />
+
+        {/* Existing Post Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -263,7 +439,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -276,7 +452,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
                   <FormMessage />
@@ -292,30 +468,18 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags}
+                  disabled={isSubmittingForm || isSuggestingTags || isScraping}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
-              {/* Remove Firebase specific upload indicators
-              {isUploadingThumbnail && (
-                <div className="flex items-center mt-2 text-sm text-muted-foreground">
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  <span>Uploading thumbnail...</span>
-                </div>
-              )}
-              {uploadProgress['thumbnail'] > 0 && (
-                <Progress value={uploadProgress['thumbnail']} className="w-full mt-2 h-2" />
-              )}
-              */}
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
                 </div>
               )}
               <FormDescription>
                 Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB).
               </FormDescription>
-              {/* No direct FormField for thumbnailUrl, handled by file input and server */}
             </FormItem>
 
             <FormField
@@ -333,7 +497,7 @@ export default function NewPostPage() {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -367,7 +531,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -376,7 +540,7 @@ export default function NewPostPage() {
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -428,10 +592,10 @@ export default function NewPostPage() {
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -446,3 +610,4 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
