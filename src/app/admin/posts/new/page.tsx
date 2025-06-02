@@ -24,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, UploadCloud, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle } from 'lucide-react';
 import { storage } from '@/lib/firebase-config';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -210,7 +210,6 @@ export default function NewPostPage() {
     if (!currentTagsArray.includes(tagToAddLower)) {
       const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
       form.setValue('tags', newTagsString, { shouldValidate: true });
-      // Remove the added tag from suggestions
       setSuggestedAiTags(prev => prev.filter(t => t.toLowerCase() !== tagToAddLower));
     } else {
       toast({
@@ -279,6 +278,7 @@ export default function NewPostPage() {
         setUploadProgress({});
         setSuggestedAiTags([]);
         setAiTagsError(null);
+        router.push('/admin/posts'); 
       }
     } catch (error) {
       console.error("Error submitting post:", error);
@@ -422,69 +422,61 @@ export default function NewPostPage() {
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
                   <FormMessage />
+                  {/* AI Tag Suggestions Section - Integrated */}
+                  <div className="mt-3 space-y-2">
+                    <Button 
+                      type="button" 
+                      onClick={handleSuggestTags} 
+                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center"
+                    >
+                      {isSuggestingTags ? (
+                        <>
+                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                          Suggesting Tags...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2 text-primary" />
+                          Suggest Tags with AI
+                        </>
+                      )}
+                    </Button>
+
+                    {aiTagsError && (
+                      <div className="text-destructive flex items-center text-sm">
+                        <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
+                      </div>
+                    )}
+
+                    {suggestedAiTags.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium mb-1 text-muted-foreground">Click to add:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggestedAiTags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              onClick={() => addAiTagToForm(tag)}
+                              className="cursor-pointer hover:bg-primary/20 text-xs"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
+                        <p className="text-xs text-muted-foreground">
+                          Write some content and click the button above to get tag suggestions.
+                        </p>
+                      )}
+                  </div>
                 </FormItem>
               )}
             />
-
-            {/* AI Tag Suggestions Section */}
-            <Card className="bg-muted/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold flex items-center">
-                  <Sparkles className="w-5 h-5 mr-2 text-primary" />
-                  AI Tag Suggestions
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Generate tag ideas based on your post content.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  type="button" 
-                  onClick={handleSuggestTags} 
-                  disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isSuggestingTags ? (
-                    <>
-                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                      Suggesting Tags...
-                    </>
-                  ) : (
-                    'Suggest Tags with AI'
-                  )}
-                </Button>
-
-                {aiTagsError && (
-                  <div className="mt-3 text-destructive flex items-center text-sm">
-                    <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
-                  </div>
-                )}
-
-                {suggestedAiTags.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium mb-1.5">Click to add:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestedAiTags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          onClick={() => addAiTagToForm(tag)}
-                          className="cursor-pointer hover:bg-primary/20"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                 {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Write some content and click the button to get tag suggestions.
-                    </p>
-                  )}
-              </CardContent>
-            </Card>
             
             <div className="flex justify-end space-x-3 pt-4">
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}>
@@ -505,4 +497,6 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
+
     
