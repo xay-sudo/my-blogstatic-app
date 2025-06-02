@@ -3,8 +3,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck } from 'lucide-react';
-// useAuth removed
+// ShieldCheck import was unused, can be removed if not needed elsewhere
+// import { ShieldCheck } from 'lucide-react';
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +13,7 @@ import React, { Suspense } from 'react';
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
+  isAdminLoggedIn?: boolean; // Added prop to indicate admin login status
 }
 
 function SearchBarFallback() {
@@ -25,10 +26,20 @@ function SearchBarFallback() {
   );
 }
 
-export default function Header({ siteSettings }: HeaderProps) {
-  // isAdminLoggedIn, isLoadingAuth removed
-
+export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   const renderHeaderAdSlot = () => {
+    if (isAdminLoggedIn) {
+      return (
+        <div
+          style={{ width: '728px', height: '90px' }}
+          className="bg-muted/10 border border-dashed border-border/50 flex items-center justify-center text-xs text-muted-foreground/70"
+          data-ai-hint="advertisement banner admin-hidden"
+        >
+          Ad Slot (Hidden for Admin)
+        </div>
+      );
+    }
+
     if (!siteSettings) {
       return (
         <Skeleton
@@ -115,9 +126,9 @@ export default function Header({ siteSettings }: HeaderProps) {
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            {/* Admin link removed from here */}
+            {/* Future nav links can go here */}
           </div>
-          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md ml-auto"> {/* Added ml-auto to push search to the right if no links are present */}
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md ml-auto">
             <Suspense fallback={<SearchBarFallback />}>
               <SearchBarClient />
             </Suspense>

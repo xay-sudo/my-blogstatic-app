@@ -3,9 +3,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/Header';
-// AuthProvider is removed
-import { getSettings } from '@/lib/settings-service'; 
+import { getSettings } from '@/lib/settings-service';
 import type { SiteSettings } from '@/types';
+import { cookies } from 'next/headers'; // Import cookies
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -15,12 +15,17 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+const SESSION_COOKIE_NAME = 'newstoday-adminsession';
+
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const settings: SiteSettings = await getSettings();
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const isAdminLoggedIn = !!sessionCookie && sessionCookie.value === 'true';
 
   return (
     <html lang="en">
@@ -30,8 +35,7 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
-        {/* AuthProvider removed */}
-        <Header siteSettings={settings} />
+        <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
         </main>
