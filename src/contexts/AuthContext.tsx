@@ -40,18 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // This check is critical: if auth is undefined, Firebase didn't initialize.
     if (!auth) {
-      console.error(
-        "AuthContext: Firebase auth object is not available. " +
-        "This usually indicates a problem with Firebase initialization, " +
-        "possibly due to missing environment variables. " +
-        "Please check your Vercel/deployment environment variables and " +
-        "the browser console for more specific Firebase initialization errors from 'firebase-config.ts'."
-      );
+      const initErrorMessage = "Firebase auth service could not be initialized. This is critical. Please verify all NEXT_PUBLIC_FIREBASE_... environment variables in your deployment (e.g., Vercel settings) and check the browser console for detailed logs from 'firebase-config.ts'.";
+      console.error("AuthContext: " + initErrorMessage);
+      setAuthError(initErrorMessage); // Set a persistent error message
       setIsLoadingAuth(false);
       setUser(null);
-      setAuthError("Firebase initialization failed. Critical environment variables might be missing in your deployment settings.");
-      return; // Don't try to subscribe if auth object isn't there
+      return; // Stop further execution of this effect
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -63,18 +59,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Cleanup subscription on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => unsubscribe();
-  }, []); // `auth` is not a reactive dependency here; its availability is determined at module load.
+  }, []); // Empty dependency array: run once on mount.
 
   const signUpWithEmailPassword = useCallback(async ({ email, password }: AuthFormValues) => {
     if (!auth) {
-      const errMessage = "Sign-up failed: Firebase is not initialized. Check deployment configuration.";
+      const errMessage = "Sign-up failed: Firebase auth is not properly initialized. Please check your deployment configuration and ensure all NEXT_PUBLIC_FIREBASE_ environment variables are correctly set.";
       setAuthError(errMessage);
+      console.error(errMessage);
       throw new Error(errMessage);
     }
     if (!password) {
-      setAuthError("Password is required for sign up.");
-      throw new Error("Password is required for sign up.");
+      const errMessage = "Password is required for sign up.";
+      setAuthError(errMessage);
+      throw new Error(errMessage);
     }
     setIsLoadingAuth(true);
     setAuthError(null);
@@ -83,7 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // onAuthStateChanged will handle setting the user
     } catch (error: any) {
       console.error("Error signing up:", error);
-      setAuthError(error.message || "Failed to sign up.");
+      const displayError = error.message || "Failed to sign up. Please check your credentials or network.";
+      setAuthError(displayError);
       throw error; // Re-throw to be caught in the form
     } finally {
       setIsLoadingAuth(false);
@@ -92,13 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmailPassword = useCallback(async ({ email, password }: AuthFormValues) => {
     if (!auth) {
-      const errMessage = "Sign-in failed: Firebase is not initialized. Check deployment configuration.";
+      const errMessage = "Sign-in failed: Firebase auth is not properly initialized. Please check your deployment configuration and ensure all NEXT_PUBLIC_FIREBASE_ environment variables are correctly set.";
       setAuthError(errMessage);
+      console.error(errMessage);
       throw new Error(errMessage);
     }
     if (!password) {
-      setAuthError("Password is required for sign in.");
-      throw new Error("Password is required for sign in.");
+      const errMessage = "Password is required for sign in.";
+      setAuthError(errMessage);
+      throw new Error(errMessage);
     }
     setIsLoadingAuth(true);
     setAuthError(null);
@@ -107,7 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // onAuthStateChanged will handle setting the user
     } catch (error: any) {
       console.error("Error signing in:", error);
-      setAuthError(error.message || "Failed to sign in.");
+      const displayError = error.message || "Failed to sign in. Please check your credentials or network.";
+      setAuthError(displayError);
       throw error; // Re-throw to be caught in the form
     } finally {
       setIsLoadingAuth(false);
@@ -116,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logoutAdmin = useCallback(async () => {
     if (!auth) {
-      const errMessage = "Logout failed: Firebase is not initialized. Check deployment configuration.";
+      const errMessage = "Logout failed: Firebase auth is not properly initialized. Check deployment configuration.";
       setAuthError(errMessage);
       console.error(errMessage);
       return;
@@ -126,13 +129,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await firebaseSignOut(auth);
       router.push('/'); 
-    } catch (error: any) {
+    } catch (error: any)
+    {
       console.error("Error signing out:", error);
-      setAuthError(error.message || "Failed to sign out.");
+      const displayError = error.message || "Failed to sign out.";
+      setAuthError(displayError);
     } finally {
       // setIsLoadingAuth(false) will be handled by onAuthStateChanged
       // or if auth.currentUser remains, set it explicitly.
-      if (auth.currentUser) setIsLoadingAuth(false); 
+      if (auth.currentUser || !auth) setIsLoadingAuth(false); 
     }
   }, [router]);
 
