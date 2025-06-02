@@ -1,29 +1,49 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getSettings } from './lib/settings-service';
 
 const SESSION_COOKIE_NAME = 'newstoday-adminsession';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check if trying to access an admin route
-  if (pathname.startsWith('/admin')) {
-    const sessionCookie = cookies().get(SESSION_COOKIE_NAME);
-
-    if (!sessionCookie || sessionCookie.value !== 'true') {
-      // Not authenticated, redirect to login page, preserving the intended destination
-      const loginUrl = new URL('/login', request.url);
-      // loginUrl.searchParams.set('redirect', pathname); // Optional: add redirect query param
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-  
-  // If trying to access login page while already logged in, redirect to admin
+  // Allow access to /login page
   if (pathname === '/login') {
     const sessionCookie = cookies().get(SESSION_COOKIE_NAME);
+    // If logged in and trying to access login, redirect to admin dashboard
     if (sessionCookie && sessionCookie.value === 'true') {
       return NextResponse.redirect(new URL('/admin', request.url));
+    }
+    return NextResponse.next(); // Allow access to login page if not logged in
+  }
+
+  if (pathname.startsWith('/admin')) {
+    const settings = await getSettings();
+    const isAdminConfigured = settings.adminUsername && settings.adminUsername.trim() !== '';
+    const sessionCookie = cookies().get(SESSION_COOKIE_NAME);
+    const isAuthenticated = sessionCookie && sessionCookie.value === 'true';
+
+    if (pathname === '/admin/settings') {
+      // If admin is not configured, allow access to settings page to set them up.
+      // Otherwise, require authentication for the settings page.
+      if (!isAdminConfigured) {
+        return NextResponse.next();
+      }
+      if (!isAuthenticated) {
+        const loginUrl = new URL('/login', request.url);
+        // loginUrl.searchParams.set('redirect', pathname); // Optional: add redirect query param
+        return NextResponse.redirect(loginUrl);
+      }
+    } else {
+      // For all other /admin routes
+      if (!isAuthenticated) {
+        // If not authenticated, redirect to login.
+        // The login page will inform if admin credentials need to be set up.
+        const loginUrl = new URL('/login', request.url);
+        // loginUrl.searchParams.set('redirect', pathname); // Optional: add redirect query param
+        return NextResponse.redirect(loginUrl);
+      }
     }
   }
 

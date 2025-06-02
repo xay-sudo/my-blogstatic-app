@@ -1,8 +1,9 @@
 
 'use client';
 
-import { useActionState, useEffect } from 'react'; // Changed from useFormState (react-dom) to useActionState (react)
+import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link'; // Import Link
 import { loginAction } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,25 +34,30 @@ function SubmitButton() {
   );
 }
 
+const ADMIN_NOT_CONFIGURED_MESSAGE = 'Admin account is not configured. Please set it up in Site Settings.';
+
 export default function LoginPage() {
-  const [state, formAction] = useActionState(loginAction, undefined); // Changed from useFormState to useActionState
+  const [state, formAction] = useActionState(loginAction, undefined);
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
-    if (state?.success === false && state.message) {
+    if (state?.success === false && state.message && state.message !== ADMIN_NOT_CONFIGURED_MESSAGE) {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
         description: state.message,
       });
     }
-    if (state?.success === true) {
-      toast({
-        title: 'Login Successful',
-        description: 'Redirecting to admin dashboard...',
+    // Successful login redirect is handled by the server action, so no client-side redirect needed here.
+    // However, a toast for success can still be useful if state.message confirms it before redirect.
+    if (state?.success === true && state.message) {
+       toast({
+        title: 'Login Successful!',
+        description: state.message, // e.g., "Redirecting to admin dashboard..."
       });
-      router.push('/admin');
+      // The redirect is now primarily handled by the server action.
+      // router.push('/admin'); // This line can be removed if server action handles redirect
     }
   }, [state, toast, router]);
 
@@ -85,20 +91,25 @@ export default function LoginPage() {
                 autoComplete="current-password"
               />
             </div>
-            {state?.success === false && state.message && (
+            {state?.success === false && state.message && state.message !== ADMIN_NOT_CONFIGURED_MESSAGE && (
               <div className="flex items-center text-sm text-destructive">
-                <AlertCircle className="mr-2 h-4 w-4" />
-                <p>{state.message}</p>
-              </div>
-            )}
-             {state?.success === true && state.message && (
-              <div className="flex items-center text-sm text-green-600">
                 <AlertCircle className="mr-2 h-4 w-4" />
                 <p>{state.message}</p>
               </div>
             )}
             <SubmitButton />
           </form>
+           {state?.success === false && state.message === ADMIN_NOT_CONFIGURED_MESSAGE && (
+              <div className="mt-4 text-center text-sm">
+                <div className="flex items-center justify-center text-sm text-destructive mb-2">
+                  <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0" />
+                  <p>{state.message}</p>
+                </div>
+                <Link href="/admin/settings" className="font-medium text-primary hover:underline">
+                  Go to Site Settings to configure admin access.
+                </Link>
+              </div>
+            )}
         </CardContent>
       </Card>
     </div>
