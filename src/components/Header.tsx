@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { SiteSettings } from '@/types';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { useState } from 'react'; 
+import React, { useState, useEffect, useRef } from 'react'; 
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
@@ -16,6 +16,25 @@ interface HeaderProps {
 
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    }
+
+    if (isSearchOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSearchOpen]);
 
   return (
     <>
@@ -36,12 +55,12 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           </div>
           <div className="flex items-center space-x-2">
             {isSearchOpen ? (
-              <>
+              <div ref={searchWrapperRef} className="flex items-center space-x-2">
                 <SearchBarClient />
                 <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)} aria-label="Close search" className="text-background hover:bg-accent/20 hover:text-accent-foreground">
                   <X className="w-5 h-5" />
                 </Button>
-              </>
+              </div>
             ) : (
               <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)} aria-label="Open search" className="text-background hover:bg-accent/20 hover:text-accent-foreground">
                 <SearchIcon className="w-5 h-5" />
