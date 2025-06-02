@@ -7,11 +7,18 @@ import * as postService from '@/lib/post-service';
 import * as settingsService from '@/lib/settings-service';
 import type { Post, SiteSettings } from '@/types';
 import * as z from 'zod';
-import { storage } from '@/lib/firebase-config'; // Import Firebase Storage
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import fs from 'fs/promises';
+import path from 'path';
+import { ensureDir } from 'fs-extra';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const UPLOADS_DIR_NAME = 'uploads';
+const THUMBNAILS_SUBDIR_NAME = 'thumbnails';
+const PUBLIC_UPLOADS_PATH = `/${UPLOADS_DIR_NAME}/${THUMBNAILS_SUBDIR_NAME}`;
+const SERVER_UPLOADS_FULL_PATH = path.join(process.cwd(), 'public', UPLOADS_DIR_NAME, THUMBNAILS_SUBDIR_NAME);
+
 
 // Schema for text fields from the form
 const postTextFormSchema = z.object({
@@ -28,13 +35,8 @@ const postTextFormSchema = z.object({
 
 export type PostServiceValues = Omit<Post, 'id' | 'date'>;
 
-async function handleFileUploadToFirebase(file: File | undefined): Promise<string | undefined> {
+async function handleLocalFileUpload(file: File | undefined): Promise<string | undefined> {
   if (!file) return undefined;
-
-  if (!storage) {
-    console.error("Firebase Storage is not initialized. Check firebase-config.ts and environment variables (especially NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET).");
-    throw new Error("File upload service is not available. Firebase Storage might be misconfigured in your project setup. Please contact support or check server logs.");
-  }
 
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit.`);
@@ -43,75 +45,45 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
     throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
   }
 
+  try {
+    await ensureDir(SERVER_UPLOADS_FULL_PATH);
+  } catch (error: any) {
+    console.error("Error creating uploads directory:", error);
+    throw new Error(`Server error: Could not prepare uploads directory. Check server permissions. Details: ${error.message}`);
+  }
+
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-  // Ensure extension is derived safely, default to .png if none
   const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
   const filename = `${file.name.replace(/\.[^/.]+$/, "")}-${uniqueSuffix}${extension}`;
-  const storageRef = ref(storage, `thumbnails/${filename}`);
+  const filePath = path.join(SERVER_UPLOADS_FULL_PATH, filename);
+  const publicUrl = `${PUBLIC_UPLOADS_PATH}/${filename}`;
 
   try {
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await fs.writeFile(filePath, buffer);
+    return publicUrl;
   } catch (error: any) {
-    console.error("Firebase Storage Upload Error:", error); // Full error object
-    console.error("Firebase Storage Server Response (if available):", error.serverResponse); // Specific server response
-
-    let errorMessage = "Could not upload file to Firebase Storage.";
-    if (error.code) {
-      let baseMessage = error.message || `An unknown error occurred. Code: ${error.code}`;
-      // Avoid "Firebase Storage: Firebase Storage:"
-      if (baseMessage.startsWith("Firebase Storage: ")) {
-        baseMessage = baseMessage.substring("Firebase Storage: ".length);
-      }
-      errorMessage = `Firebase Storage: ${baseMessage}`;
-      
-      if (error.code === 'storage/unknown') {
-        errorMessage += "\nThis often indicates a Firebase project configuration issue. Please check:\n" +
-                        "1. Storage Security Rules in Firebase Console (allow writes to 'thumbnails/' for authenticated users).\n" +
-                        "2. Cloud Storage API is enabled in Google Cloud Console for your project.\n" +
-                        "3. 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET' environment variable is correct.\n" +
-                        "4. Firebase project's billing status and quotas.\n" +
-                        "➡️ Detailed server logs (Vercel logs) for 'Firebase Storage Server Response' may provide more specific clues.";
-      } else if (error.code === 'storage/unauthorized') {
-        errorMessage += "\nCheck your Firebase Storage security rules. You might not have permission to write to the specified location.";
-      } else if (error.code === 'storage/object-not-found') {
-        errorMessage += "\nThe file path in Storage might be incorrect or the object doesn't exist (should not happen for uploads).";
-      } else if (error.code === 'storage/quota-exceeded') {
-        errorMessage += "\nYou have exceeded your Firebase Storage quota. Please check your plan and usage.";
-      }
-    } else if (error.message) {
-      errorMessage = `Firebase Storage: ${error.message}`;
-    }
-    
-    throw new Error(errorMessage);
+    console.error("Error saving uploaded file:", error);
+    throw new Error(`Could not save uploaded file. Details: ${error.message}`);
   }
 }
 
-async function deleteFileFromFirebaseStorage(fileUrl: string | undefined) {
-  if (!fileUrl || !storage) return;
-
+async function deleteLocalFile(fileUrl: string | undefined) {
+  if (!fileUrl || !fileUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
+    console.warn('Skipping deletion for non-local or invalid file URL:', fileUrl);
+    return;
+  }
   try {
-    const url = new URL(fileUrl);
-    const pathWithBucket = url.pathname.split('/o/')[1];
-    if (!pathWithBucket) {
-        console.warn('Could not extract file path from Firebase Storage URL (no /o/ segment):', fileUrl);
-        return;
-    }
-    const filePath = decodeURIComponent(pathWithBucket.split('?')[0]);
-
-    if (!filePath.startsWith('thumbnails/')) {
-        console.warn('Attempted to delete file outside thumbnails directory in Firebase Storage, skipping:', filePath);
-        return;
-    }
-    const fileRef = ref(storage, filePath);
-    await deleteObject(fileRef);
-    console.log('Successfully deleted file from Firebase Storage:', filePath);
+    const filename = path.basename(fileUrl);
+    const filePath = path.join(SERVER_UPLOADS_FULL_PATH, filename);
+    await fs.unlink(filePath);
+    console.log('Successfully deleted local file:', filePath);
   } catch (error: any) {
-    if (error.code === 'storage/object-not-found') {
-      console.warn('File not found in Firebase Storage, skipping delete:', fileUrl);
+    if (error.code === 'ENOENT') {
+      console.warn('File not found locally, skipping delete:', fileUrl);
     } else {
-      console.error('Failed to delete file from Firebase Storage:', fileUrl, error);
+      console.error('Failed to delete local file:', fileUrl, error);
     }
   }
 }
@@ -139,7 +111,7 @@ export async function createPostAction(formData: FormData) {
 
   try {
     if (thumbnailFile && thumbnailFile.size > 0) {
-      thumbnailUrl = await handleFileUploadToFirebase(thumbnailFile);
+      thumbnailUrl = await handleLocalFileUpload(thumbnailFile);
     }
 
     const postData: PostServiceValues = {
@@ -151,7 +123,7 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    if (thumbnailUrl) await deleteFileFromFirebaseStorage(thumbnailUrl);
+    if (thumbnailUrl) await deleteLocalFile(thumbnailUrl); // Attempt to clean up if created
     return {
       success: false,
       message: error.message || 'Could not create post.',
@@ -196,10 +168,11 @@ export async function updatePostAction(postId: string, formData: FormData) {
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
-      if (currentThumbnailUrl) {
-        await deleteFileFromFirebaseStorage(currentThumbnailUrl);
+      // Delete old local file if it exists and a new one is being uploaded
+      if (currentThumbnailUrl && currentThumbnailUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
+        await deleteLocalFile(currentThumbnailUrl);
       }
-      newUrlUploaded = await handleFileUploadToFirebase(newThumbnailFile);
+      newUrlUploaded = await handleLocalFileUpload(newThumbnailFile);
       finalThumbnailUrl = newUrlUploaded;
     } else {
       finalThumbnailUrl = currentThumbnailUrl; 
@@ -213,7 +186,8 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      if (newUrlUploaded) await deleteFileFromFirebaseStorage(newUrlUploaded);
+      // If update failed but a new file was uploaded, try to clean it up
+      if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
       return {
         success: false,
         message: 'Post not found or could not be updated.',
@@ -222,7 +196,8 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
-    if (newUrlUploaded) await deleteFileFromFirebaseStorage(newUrlUploaded);
+    // If an error occurred and a new file was uploaded, try to clean it up
+    if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
     return {
       success: false,
       message: error.message || 'Could not update post.',
@@ -241,8 +216,8 @@ export async function updatePostAction(postId: string, formData: FormData) {
 export async function deletePostAction(postId: string) {
   try {
     const postToDelete = await postService.getPostById(postId);
-    if (postToDelete?.thumbnailUrl) {
-      await deleteFileFromFirebaseStorage(postToDelete.thumbnailUrl);
+    if (postToDelete?.thumbnailUrl && postToDelete.thumbnailUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
+      await deleteLocalFile(postToDelete.thumbnailUrl);
     }
     await postService.deletePostById(postId);
     revalidatePath('/');
