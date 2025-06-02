@@ -24,5 +24,8 @@ export interface SiteSettings {
   // Local Admin Auth
   adminUsername?: string;
   adminPassword?: string; // WARNING: Stored in plaintext for local demo only. NOT SECURE.
+  // Global Footer Scripts
+  globalFooterScriptsEnabled?: boolean;
+  globalFooterScriptsCustomHtml?: string;
 }
 

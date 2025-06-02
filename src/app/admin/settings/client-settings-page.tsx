@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 as Loader2Icon, Save, Image as ImageIcon, Code, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Loader2 as Loader2Icon, Save, Image as ImageIcon, Code, ShieldAlert, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { updateSiteSettingsAction } from '@/app/actions'; 
 import type { SiteSettings } from '@/types';
 import { Switch } from '@/components/ui/switch';
@@ -43,6 +43,8 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
+  globalFooterScriptsEnabled: false,
+  globalFooterScriptsCustomHtml: '',
 };
 
 
@@ -62,6 +64,8 @@ const siteSettingsFormSchema = z.object({
   bannerCustomHtml: z.string().optional(),
   adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
+  globalFooterScriptsEnabled: z.boolean().default(false),
+  globalFooterScriptsCustomHtml: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.bannerEnabled && data.bannerType === 'image') {
     if (!data.bannerImageUrl) {
@@ -82,14 +86,20 @@ const siteSettingsFormSchema = z.object({
     }
   }
   
+  if (data.globalFooterScriptsEnabled && (!data.globalFooterScriptsCustomHtml || data.globalFooterScriptsCustomHtml.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Custom HTML for footer scripts is required when enabled.',
+      path: ['globalFooterScriptsCustomHtml'],
+    });
+  }
+
   const usernameProvided = data.adminUsername && data.adminUsername.trim().length > 0;
   const passwordFieldHasInput = data.adminPassword && data.adminPassword.length > 0;
   const initialUsername = initialSettings?.adminUsername || '';
   const initialPasswordExists = !!initialSettings?.adminPassword && initialSettings.adminPassword.length > 0;
 
   if (usernameProvided) {
-    // Scenario 1: Username is newly set (was empty) OR username has changed.
-    // In this case, a new password MUST be provided.
     if (initialUsername === '' || data.adminUsername !== initialUsername) {
       if (!passwordFieldHasInput) {
         ctx.addIssue({
@@ -99,15 +109,6 @@ const siteSettingsFormSchema = z.object({
         });
       }
     }
-    // Scenario 2: Username is the same as initial, and a password was initially set.
-    // In this case, if the password field is empty, it means "keep current password".
-    // If password field has input, it means "update password".
-    // No Zod issue here if password field is empty.
-    else if (data.adminUsername === initialUsername && initialPasswordExists) {
-        // If new password provided, it must meet length criteria (handled by individual field Zod rule)
-    }
-    // Scenario 3: Username is the same as initial, but no password was initially set (e.g. fresh setup).
-    // In this case, a new password must be provided.
     else if (data.adminUsername === initialUsername && !initialPasswordExists) {
         if (!passwordFieldHasInput) {
             ctx.addIssue({
@@ -118,7 +119,6 @@ const siteSettingsFormSchema = z.object({
         }
     }
   } else if (passwordFieldHasInput && !usernameProvided) { 
-    // If password is provided but username is cleared/empty, this is an error.
      ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Username is required if a password is set or being entered.",
@@ -155,6 +155,8 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '', 
+      globalFooterScriptsEnabled: propsInitialSettings?.globalFooterScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsEnabled,
+      globalFooterScriptsCustomHtml: propsInitialSettings?.globalFooterScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsCustomHtml,
     },
     mode: 'onChange',
   });
@@ -173,6 +175,8 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '',
+      globalFooterScriptsEnabled: propsInitialSettings?.globalFooterScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsEnabled,
+      globalFooterScriptsCustomHtml: propsInitialSettings?.globalFooterScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsCustomHtml,
     });
   }, [propsInitialSettings, form]);
 
@@ -180,14 +184,17 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const watchedBannerEnabled = form.watch('bannerEnabled');
   const watchedAdminUsername = form.watch('adminUsername');
   const watchedAdminPassword = form.watch('adminPassword');
+  const watchedGlobalFooterScriptsEnabled = form.watch('globalFooterScriptsEnabled');
 
   const generalSettingFields: (keyof SiteSettingsFormValues)[] = [
     'siteTitle', 'siteDescription', 'postsPerPage', 
     'bannerEnabled', 'bannerType', 'bannerImageUrl', 
-    'bannerImageLink', 'bannerImageAltText', 'bannerCustomHtml'
+    'bannerImageLink', 'bannerImageAltText', 'bannerCustomHtml',
+    'globalFooterScriptsEnabled', 'globalFooterScriptsCustomHtml',
   ];
-  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]);
   const isAdminSettingsDirty = form.formState.dirtyFields.adminUsername || (watchedAdminPassword && watchedAdminPassword.length > 0);
+  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]);
+
 
   const isGeneralSaveDisabled = isSubmitting || !isGeneralSettingsDirty;
   const isAdminSaveDisabled = isSubmitting || !isAdminSettingsDirty;
@@ -207,6 +214,9 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('bannerImageAltText', data.bannerImageAltText || '');
     formData.append('bannerCustomHtml', data.bannerCustomHtml || '');
     formData.append('adminUsername', data.adminUsername || '');
+    formData.append('globalFooterScriptsEnabled', data.globalFooterScriptsEnabled ? 'on' : 'off');
+    formData.append('globalFooterScriptsCustomHtml', data.globalFooterScriptsCustomHtml || '');
+
 
     if (data.adminPassword && data.adminPassword.length > 0) {
       formData.append('adminPassword', data.adminPassword);
@@ -228,28 +238,18 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
         
         const newInitialSettings = { ...propsInitialSettings, ...data };
         if (!data.adminPassword || data.adminPassword.length === 0) {
-          // If password field was empty and username didn't change (and old pass existed), retain old password conceptually
           if (propsInitialSettings.adminUsername === data.adminUsername && propsInitialSettings.adminPassword) {
              newInitialSettings.adminPassword = propsInitialSettings.adminPassword;
-          } else {
-            // If username changed or was new, and password was set, it's in `data.adminPassword` (though we reset field to '')
-            // If password was truly cleared (e.g. admin account removed), then newInitialSettings.adminPassword will be ''
-            // This logic is tricky because form.reset clears the field.
-            // The key is what `initialSettings` global holds for next Zod validation.
           }
         }
         initialSettings = {
-           ...propsInitialSettings, // Start with original props
-           ...data, // Overlay with submitted data
-           // Critical: for password, if data.adminPassword is EMPTY, it doesn't mean we cleared it in the DB
-           // IF the username was NOT changed and an initial password EXISTED.
-           // In this case, the server action would keep the old password.
-           // So, initialSettings for the *next* validation round should reflect that.
+           ...propsInitialSettings, 
+           ...data, 
            adminPassword: (data.adminPassword && data.adminPassword.length > 0) 
-                          ? data.adminPassword // It was changed
+                          ? data.adminPassword 
                           : (data.adminUsername === propsInitialSettings.adminUsername && propsInitialSettings.adminPassword)
-                            ? propsInitialSettings.adminPassword // It was intentionally kept by submitting blank
-                            : '' // It was cleared or never set
+                            ? propsInitialSettings.adminPassword 
+                            : '' 
         };
         form.reset({ ...data, adminPassword: '' }); 
       } else {
@@ -301,13 +301,13 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <Tabs defaultValue="general">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="general">General & Ads</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 mb-6">
+                <TabsTrigger value="general">General</TabsTrigger>
+                <TabsTrigger value="ads_scripts">Ads & Scripts</TabsTrigger>
                 <TabsTrigger value="admin_access">Admin Access</TabsTrigger>
               </TabsList>
 
               <TabsContent value="general" className="space-y-8">
-                {/* General Settings */}
                 <FormField
                   control={form.control}
                   name="siteTitle"
@@ -350,19 +350,27 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                     </FormItem>
                   )}
                 />
-                
-                <Separator />
-
-                {/* Header Ad Slot Settings */}
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled}>
+                    {isSubmitting ? (
+                      <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4 mr-2" />Save General Settings</>
+                    )}
+                  </Button>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="ads_scripts" className="space-y-8">
                 <div>
-                  <h3 className="text-lg font-medium mb-4">Header Ad Slot (728x90)</h3>
+                  <h3 className="text-lg font-medium mb-4">Header Ad Slot (e.g., 728x90)</h3>
                   <FormField
                     control={form.control}
                     name="bannerEnabled"
                     render={({ field }) => (
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                         <div className="space-y-0.5">
-                          <FormLabel>Enable Ad Slot</FormLabel>
+                          <FormLabel>Enable Header Ad Slot</FormLabel>
                           <FormDescription>Show an ad slot in the site header.</FormDescription>
                         </div>
                         <FormControl>
@@ -388,11 +396,11 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                               >
                                 <FormItem className="flex items-center space-x-2 space-y-0">
                                   <FormControl><RadioGroupItem value="image" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center"><ImageIcon className="w-4 h-4 mr-2" /> Image</FormLabel>
+                                  <FormLabel className="font-normal flex items-center"><ImageIcon className="w-4 h-4 mr-2" /> Image Banner</FormLabel>
                                 </FormItem>
                                 <FormItem className="flex items-center space-x-2 space-y-0">
                                   <FormControl><RadioGroupItem value="customHtml" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center"><Code className="w-4 h-4 mr-2" /> Custom HTML</FormLabel>
+                                  <FormLabel className="font-normal flex items-center"><Code className="w-4 h-4 mr-2" /> Custom HTML/Script</FormLabel>
                                 </FormItem>
                               </RadioGroup>
                             </FormControl>
@@ -415,12 +423,65 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                     </div>
                   )}
                 </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-lg font-medium mb-4 flex items-center">
+                    <TerminalSquare className="w-5 h-5 mr-2 text-primary" />
+                    Global Footer Scripts
+                  </h3>
+                  <FormField
+                    control={form.control}
+                    name="globalFooterScriptsEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>Enable Global Footer Scripts</FormLabel>
+                          <FormDescription>Inject custom HTML/scripts before the closing &lt;/body&gt; tag.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  {watchedGlobalFooterScriptsEnabled && (
+                     <div className="mt-6 space-y-6 pl-2 border-l-2 border-primary/50 ml-1">
+                        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+                            <FormField
+                                control={form.control}
+                                name="globalFooterScriptsCustomHtml"
+                                render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Custom HTML/Script for Footer</FormLabel>
+                                    <FormControl>
+                                    <Textarea
+                                        placeholder="<!-- Your analytics, ad, or other scripts here -->"
+                                        {...field}
+                                        rows={8}
+                                        disabled={isSubmitting}
+                                    />
+                                    </FormControl>
+                                    <FormDescription>
+                                    This code will be injected on all pages. Useful for analytics, global ad network scripts, etc.
+                                    </FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+                  )}
+                </div>
+
+
                 <div className="flex justify-end pt-4">
                   <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
-                      <><Save className="w-4 h-4 mr-2" />Save General Settings</>
+                      <><Save className="w-4 h-4 mr-2" />Save Ads & Scripts Settings</>
                     )}
                   </Button>
                 </div>

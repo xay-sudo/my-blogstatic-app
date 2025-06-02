@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS_OBJ: SiteSettings = {
   bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
+  globalFooterScriptsEnabled: false,
+  globalFooterScriptsCustomHtml: '',
 };
 
 // Helper function to validate HTTP/HTTPS URL format for internal use
@@ -199,7 +201,8 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   const adminSupabase = getSupabaseAdminClient();
   const currentSettings = await getSettings(); 
   
-  const mergedSettings: Partial<SiteSettings> = { ...currentSettings, ...newSettings };
+  const mergedSettings: SiteSettings = { ...DEFAULT_SETTINGS_OBJ, ...currentSettings, ...newSettings };
+
 
   if (typeof mergedSettings.postsPerPage === 'string') {
     mergedSettings.postsPerPage = parseInt(mergedSettings.postsPerPage, 10);
@@ -219,6 +222,16 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   if (newSettings.hasOwnProperty('adminPassword')) {
       mergedSettings.adminPassword = String(newSettings.adminPassword ?? '');
   }
+
+  if (typeof mergedSettings.globalFooterScriptsEnabled === 'string') {
+    mergedSettings.globalFooterScriptsEnabled = mergedSettings.globalFooterScriptsEnabled === 'on' || mergedSettings.globalFooterScriptsEnabled === 'true';
+  } else if (typeof mergedSettings.globalFooterScriptsEnabled === 'undefined') {
+    mergedSettings.globalFooterScriptsEnabled = false;
+  }
+  if (newSettings.hasOwnProperty('globalFooterScriptsCustomHtml')) {
+      mergedSettings.globalFooterScriptsCustomHtml = String(newSettings.globalFooterScriptsCustomHtml ?? '');
+  }
+
 
   const { data: updatedData, error } = await adminSupabase
     .from('site_settings')

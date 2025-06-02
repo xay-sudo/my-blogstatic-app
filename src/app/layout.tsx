@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import { getSettings } from '@/lib/settings-service';
 import type { SiteSettings } from '@/types';
 import { cookies } from 'next/headers'; // Import cookies
+import RenderHtmlContent from '@/components/RenderHtmlContent';
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -43,6 +44,12 @@ export default async function RootLayout({
         <footer className="py-6 text-center text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} Newstoday. All rights reserved.</p>
         </footer>
+        {settings.globalFooterScriptsEnabled && settings.globalFooterScriptsCustomHtml && (
+          <RenderHtmlContent
+            htmlString={settings.globalFooterScriptsCustomHtml}
+            // No specific className or placeholderStyle needed for invisible footer scripts by default
+          />
+        )}
       </body>
     </html>
   );
