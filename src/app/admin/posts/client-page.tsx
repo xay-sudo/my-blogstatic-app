@@ -61,9 +61,6 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           title: 'Post Deleted',
           description: `"${postTitle}" has been successfully deleted.`,
         });
-        // Refresh data by removing the post from the local state.
-        // The revalidatePath in the server action should handle cache, 
-        // but updating client state provides immediate feedback.
         setAllPosts(prev => prev.filter(post => post.id !== postId));
       } else {
         toast({
@@ -115,7 +112,6 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           </div>
         </CardHeader>
         <CardContent>
-          {/* isLoading prop on parent page handles initial load skeleton */}
           {filteredPosts.length === 0 && !isLoading ? (
             <p className="text-muted-foreground text-center py-10">
               {searchTerm ? `No posts found for "${searchTerm}".` : "No posts yet. Create your first one!"}
@@ -153,8 +149,10 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                              <ExternalLink className="w-4 h-4" />
                           </Link>
                        </Button>
-                      <Button variant="ghost" size="icon" title="Edit Post (disabled)" disabled> {/* Future: Link to /admin/posts/edit/[id] */}
-                          <Edit2 className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" asChild title="Edit Post">
+                          <Link href={`/admin/posts/edit/${post.id}`}>
+                             <Edit2 className="w-4 h-4" />
+                          </Link>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -192,6 +190,5 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
     </>
   );
 }
-
 
     

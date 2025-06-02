@@ -27,8 +27,6 @@ async function readPostsFromFile(): Promise<Post[]> {
     return JSON.parse(jsonData) as Post[];
   } catch (error) {
     console.error('Error reading posts file:', error);
-    // If there's an error reading (e.g., file is corrupted or truly missing despite ensurePostsFileExists), return empty array
-    // This could happen if ensurePostsFileExists fails silently or if there's a race condition (less likely with await)
     return [];
   }
 }
@@ -55,22 +53,49 @@ export const getPostBySlug = async (slug: string): Promise<Post | undefined> => 
   return posts.find(post => post.slug === slug);
 };
 
+export const getPostById = async (id: string): Promise<Post | undefined> => {
+  const posts = await readPostsFromFile();
+  return posts.find(post => post.id === id);
+};
+
 export const addPost = async (newPostData: Omit<Post, 'id' | 'date'>): Promise<Post> => {
   let posts = await readPostsFromFile();
   const postWithMetadata: Post = {
     ...newPostData,
     id: crypto.randomUUID(),
     date: new Date().toISOString(),
-    thumbnailUrl: newPostData.thumbnailUrl || undefined, // Ensure thumbnailUrl is explicitly set or undefined
+    thumbnailUrl: newPostData.thumbnailUrl || undefined,
   };
   posts.unshift(postWithMetadata); // Add to the beginning
   
-  // Explicitly sort all posts by date (newest first) before writing
   posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   await writePostsToFile(posts);
   return postWithMetadata;
 };
+
+export const updatePost = async (postId: string, updatedPostData: Omit<Post, 'id' | 'date'>): Promise<Post | undefined> => {
+  let posts = await readPostsFromFile();
+  const postIndex = posts.findIndex(post => post.id === postId);
+
+  if (postIndex === -1) {
+    return undefined; // Post not found
+  }
+
+  // Preserve original ID and date, update the rest
+  const existingPost = posts[postIndex];
+  const modifiedPost: Post = {
+    ...existingPost,
+    ...updatedPostData,
+    thumbnailUrl: updatedPostData.thumbnailUrl || undefined,
+  };
+
+  posts[postIndex] = modifiedPost;
+  posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  await writePostsToFile(posts);
+  return modifiedPost;
+};
+
 
 export const deletePostById = async (postId: string): Promise<void> => {
   let posts = await readPostsFromFile();
@@ -137,3 +162,5 @@ const initialPostsData: Post[] = [
 ];
 
 ensurePostsFileExists(initialPostsData).catch(console.error);
+
+    
