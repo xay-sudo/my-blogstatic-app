@@ -40,8 +40,8 @@ const postFormSchema = z.object({
   tags: z.string() 
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
-  imageUrl: z.string().url({ message: 'Please enter a valid URL or upload an image.' }).optional().or(z.literal('')),
-  thumbnailUrl: z.string().url({ message: 'Please enter a valid URL or upload a thumbnail.' }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: 'Please upload a valid image or ensure the URL is correct.' }).optional().or(z.literal('')),
+  thumbnailUrl: z.string().url({ message: 'Please upload a valid thumbnail or ensure the URL is correct.' }).optional().or(z.literal('')),
 });
 
 type PostFormClientValues = z.infer<typeof postFormSchema>;
@@ -156,38 +156,41 @@ export default function NewPostPage() {
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
-    let finalData = { ...data };
+    let finalData = { ...data }; // Use a mutable copy
 
     try {
       if (thumbnailFile) {
         toast({ title: "Uploading Thumbnail...", description: "Please wait." });
         const uploadedThumbnailUrl = await uploadFile(thumbnailFile, 'posts_images/thumbnails', 'thumbnail');
-        finalData.thumbnailUrl = uploadedThumbnailUrl;
+        finalData.thumbnailUrl = uploadedThumbnailUrl; // Update the mutable copy
         form.setValue('thumbnailUrl', uploadedThumbnailUrl, {shouldValidate: true}); 
       }
       if (mainImageFile) {
          toast({ title: "Uploading Main Image...", description: "Please wait." });
         const uploadedImageUrl = await uploadFile(mainImageFile, 'posts_images/main', 'mainImage');
-        finalData.imageUrl = uploadedImageUrl;
+        finalData.imageUrl = uploadedImageUrl; // Update the mutable copy
         form.setValue('imageUrl', uploadedImageUrl, {shouldValidate: true});
       }
     } catch (error) {
       setIsSubmittingForm(false);
       setUploadProgress({});
+      // Toast for upload failure is handled in uploadFile
       return; 
     }
     
+    // Re-validate the form after URLs might have been populated by uploads
     const validationResult = await form.trigger(); 
     if (!validationResult) {
         toast({
             variant: "destructive",
             title: "Validation Error",
-            description: "Please check the form for errors after image processing.",
+            description: "Please check the form for errors. Ensure uploaded images resulted in valid URLs.",
         });
         setIsSubmittingForm(false);
         return;
     }
     
+    // Use the latest form values which include uploaded URLs
     const dataForAction = form.getValues();
 
     const processedTags = typeof dataForAction.tags === 'string'
@@ -205,36 +208,39 @@ export default function NewPostPage() {
     };
 
     try {
-      const result = await createPostAction(postPayload);
-      if (result?.success === false) {
+      const result = await createPostAction(postPayload); // Server action call
+      if (result?.success === false) { // Check if the action returned a specific failure
          toast({
           variant: "destructive",
           title: 'Failed to Create Post',
-          description: result.message || 'An unknown error occurred.',
+          description: result.message || 'An unknown error occurred on the server.',
         });
+        // If server action returns specific field errors, apply them to the form
         if (result.errors) {
           Object.entries(result.errors).forEach(([fieldName, errors]) => {
+             // Ensure errors is an array and fieldName is a valid key
              if (Array.isArray(errors) && errors.length > 0) {
                 form.setError(fieldName as keyof PostFormClientValues, { type: 'server', message: errors.join(', ') });
              }
           });
         }
-      } else {
+      } else { // Success case (redirect is handled by server action)
         toast({
           title: 'Post Created Successfully',
           description: `"${postPayload.title}" has been created.`,
         });
+        // Server action handles revalidation and redirection.
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors from the action call itself
       console.error("Error submitting post:", error);
       toast({
         variant: "destructive",
         title: 'Submission Error',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred during submission.',
       });
     } finally {
       setIsSubmittingForm(false);
-      setUploadProgress({});
+      setUploadProgress({}); // Reset progress for all uploads
     }
   };
 
@@ -332,7 +338,7 @@ export default function NewPostPage() {
                   <FormControl>
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
-                      {...field}
+                      {...field} // field already includes value and onChange
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -360,32 +366,13 @@ export default function NewPostPage() {
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" />
                 </div>
               )}
-              <FormDescription>Upload a thumbnail (e.g., 400x300px). If you provide a URL below, this upload will be ignored.</FormDescription>
-               <FormField
-                control={form.control}
-                name="thumbnailUrl"
-                render={({ field }) => (
-                  <FormItem className="mt-2">
-                    <FormLabel>Or Enter Thumbnail URL</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="https://placehold.co/400x300.png" 
-                        {...field} 
-                        onChange={(e) => {
-                          field.onChange(e);
-                          if (e.target.value) { setThumbnailFile(null); setThumbnailPreview(null); }
-                        }}
-                        disabled={!!thumbnailFile}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormDescription>Upload an optional thumbnail image for the post (e.g., 400x300px).</FormDescription>
+              {/* FormMessage for thumbnailUrl can be shown if server validation returns error for this field */}
+              <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} />
             </FormItem>
 
              <FormItem>
-              <FormLabel htmlFor="main-image-upload">Main Post Image (Optional)</FormLabel>
+              <FormLabel htmlFor="main-image-upload">Main Post Image</FormLabel>
               <FormControl>
                 <Input
                   id="main-image-upload"
@@ -403,28 +390,9 @@ export default function NewPostPage() {
                   <Image src={mainImagePreview} alt="Main image preview" width={192} height={192} style={{objectFit:"cover"}} className="rounded"/>
                 </div>
               )}
-              <FormDescription>Upload a main image for the post (e.g., 800x600px). If you provide a URL below, this upload will be ignored.</FormDescription>
-              <FormField
-                control={form.control}
-                name="imageUrl"
-                render={({ field }) => (
-                   <FormItem className="mt-2">
-                    <FormLabel>Or Enter Main Image URL</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="https://placehold.co/800x600.png" 
-                        {...field} 
-                        onChange={(e) => {
-                          field.onChange(e);
-                           if (e.target.value) { setMainImageFile(null); setMainImagePreview(null); }
-                        }}
-                        disabled={!!mainImageFile}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormDescription>Upload an optional main image for the post (e.g., 800x600px).</FormDescription>
+              {/* FormMessage for imageUrl can be shown if server validation returns error for this field */}
+              <FormField control={form.control} name="imageUrl" render={() => <FormMessage />} />
             </FormItem>
             
             <div className="flex justify-end space-x-3 pt-4">
@@ -446,3 +414,5 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
+    
