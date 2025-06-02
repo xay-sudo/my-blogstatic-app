@@ -1,7 +1,37 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import * as cheerio from 'cheerio'; // Changed this line
+import * as cheerio from 'cheerio';
+
+const elementsToRemove = [
+  'script', 'style', 'noscript', 'iframe', 'header', 'footer', 'nav', 'aside',
+  '.sidebar', '.comments', '.comment-form', '.comment-respond', '#comments', '#respond',
+  '.related-posts', '.related_posts', // common variations for related content
+  '.ad', '.ads', '.advert', '.advertisement', // common ad classes
+  '[class*="ad-"]', '[id*="ad-"]', // classes/ids containing "ad-"
+  '[class*="-ad"]', '[id*="-ad"]', // classes/ids ending with "-ad"
+  '[class*="adsbygoogle"]', // Google ads
+  '[class*="advertis"]', '[id*="advertis"]', // "advertising", "advertisement"
+  '[class*="sponsor"]', '[id*="sponsor"]', // "sponsored"
+  '[class*="promo"]', '[id*="promo"]', // "promotion"
+  '[class*="widget"]', '[id*="widget"]', // widgets
+  '.social-share', '.social-links', '.share-buttons', // social sharing
+  '.author-bio', '.author-box', // author bios that might be separate from main content
+  'form', // most forms are not main content
+  '[aria-hidden="true"]', // accessibility, often for non-visible elements
+  '.sr-only', '.screen-reader-text', // screen reader only text
+  // common navigation/menu patterns by class or id
+  '[class*="nav"]', '[id*="nav"]',
+  '[class*="menu"]', '[id*="menu"]',
+  // elements with display:none or visibility:hidden (inline styles)
+  '[style*="display:none"]', '[style*="display: none"]',
+  '[style*="visibility:hidden"]', '[style*="visibility: hidden"]',
+  // common cookie banners/popups
+  '[id*="cookie"]', '[class*="cookie"]',
+  '[id*="gdpr"]', '[class*="gdpr"]',
+  '[id*="popup"]', '[class*="popup"]', '[class*="modal"]', '[id*="modal"]',
+  //figcaption, figure > figcaption might be desired, but loose figcaption might be clutter
+].join(', ');
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +42,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required and must be a string.' }, { status: 400 });
     }
 
-    // Validate URL format (basic check)
     try {
       new URL(url);
     } catch (e) {
@@ -25,13 +54,12 @@ export async function POST(request: NextRequest) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
       },
-      timeout: 15000, // 15 seconds timeout
+      timeout: 15000, 
     });
 
     const html = response.data;
-    const $ = cheerio.load(html); // This will now work correctly
+    const $ = cheerio.load(html);
 
-    // Extract title - common patterns
     const title = 
       $('meta[property="og:title"]').attr('content')?.trim() ||
       $('meta[name="twitter:title"]').attr('content')?.trim() ||
@@ -40,31 +68,30 @@ export async function POST(request: NextRequest) {
       $('.post-title').first().text()?.trim() ||
       $('.entry-title').first().text()?.trim();
 
-    // Extract content - attempt common article containers
     let content = '';
     const contentSelectors = [
-      'article .post-content', // Common in WordPress themes
-      'article .entry-content', // Common in WordPress themes
+      'article .post-content', 
+      'article .entry-content', 
+      'article .article-content',
+      'article .story-content',
       'article',
       '.post-content',
       '.entry-content',
+      '.article-body',
+      '.story-body',
       '#main-content',
+      '#articleBody',
+      '[itemprop="articleBody"]',
       '[role="main"] .content',
       '[role="main"]',
-      '.article-body',
-      '.story-content',
     ];
 
     for (const selector of contentSelectors) {
-      const selectedContent = $(selector).first();
-      if (selectedContent.length) {
-        // Clone and clean the content
-        const $contentClone = selectedContent.clone();
-        $contentClone.find('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .comments, .related-posts, .ad, .social-share, .author-bio, form, input, button, [aria-hidden="true"], .sr-only, .screen-reader-text, #comments, .comment-respond').remove();
-        // Remove elements that are likely navigation or ads by common class names
-        $contentClone.find('[class*="nav"], [class*="menu"], [class*="ads"], [class*="promo"], [class*="widget"], [id*="nav"], [id*="menu"], [id*="ads"], [id*="promo"], [id*="widget"]').remove();
+      const selectedElement = $(selector).first();
+      if (selectedElement.length) {
+        const $contentClone = selectedElement.clone();
+        $contentClone.find(elementsToRemove).remove();
         
-        // Convert relative image URLs to absolute
         $contentClone.find('img').each((i, el) => {
           const img = $(el);
           let src = img.attr('src');
@@ -72,54 +99,57 @@ export async function POST(request: NextRequest) {
             try {
               src = new URL(src, url).href;
               img.attr('src', src);
-            } catch (e) {
-              // console.warn(`Could not resolve relative image URL: ${src} for base ${url}`);
-            }
+            } catch (e) { /* console.warn(`Could not resolve relative image URL: ${src} for base ${url}`); */ }
           }
-          // Remove tiny images/spacers
           const width = parseInt(img.attr('width') || '0', 10);
           const height = parseInt(img.attr('height') || '0', 10);
           if ((width > 0 && width < 50) || (height > 0 && height < 50)) {
              img.remove();
           }
         });
-
+        $contentClone.find('p:empty, div:empty, span:empty').remove();
         content = $contentClone.html() || '';
-        if (content.trim()) break; 
+        if (content.trim().length > 200) break; // Prefer longer content if multiple selectors match
       }
     }
     
-    if (!content.trim() && $('body').length) { // Fallback to body if no specific content found
+    if (!content.trim() && $('body').length) { 
         const $bodyClone = $('body').clone();
-        $bodyClone.find('script, style, noscript, iframe, header, footer, nav, aside, .sidebar, .comments, .related-posts, .ad, .social-share, .author-bio, form, input, button, [aria-hidden="true"], .sr-only, .screen-reader-text, #comments, .comment-respond').remove();
-        $bodyClone.find('[class*="nav"], [class*="menu"], [class*="ads"], [class*="promo"], [class*="widget"], [id*="nav"], [id*="menu"], [id*="ads"], [id*="promo"], [id*="widget"]').remove();
+        $bodyClone.find(elementsToRemove).remove();
+        $bodyClone.find('img').each((i, el) => {
+            const img = $(el);
+            let src = img.attr('src');
+            if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+              try {
+                src = new URL(src, url).href;
+                img.attr('src', src);
+              } catch (e) { /* empty */ }
+            }
+        });
+        $bodyClone.find('p:empty, div:empty, span:empty').remove();
         content = $bodyClone.html() || '';
     }
 
-
-    // Extract featured image URL - common patterns
     let featuredImageUrl =
       $('meta[property="og:image"]').attr('content')?.trim() ||
       $('meta[name="twitter:image"]').attr('content')?.trim() ||
       $('article img').first().attr('src')?.trim() ||
       $('.featured-image img').first().attr('src')?.trim() ||
-      $('#content img').first().attr('src')?.trim(); // A very general fallback
+      $('#content img').first().attr('src')?.trim(); 
 
     if (featuredImageUrl && !featuredImageUrl.startsWith('http') && !featuredImageUrl.startsWith('data:')) {
       try {
         featuredImageUrl = new URL(featuredImageUrl, url).href;
       } catch (e) {
-        // console.warn(`Could not resolve relative featured image URL: ${featuredImageUrl} for base ${url}`);
-        featuredImageUrl = ''; // Invalidate if it cannot be resolved
+        featuredImageUrl = ''; 
       }
     }
     
-    // Basic clean up of content (remove excessive newlines, though client editor might handle this)
     content = content.replace(/\n\s*\n/g, '\n').trim();
 
     return NextResponse.json({
       title: title || 'Untitled Post',
-      content: content || '<p>Content could not be extracted.</p>',
+      content: content || '<p>Content could not be extracted or was empty after cleaning.</p>',
       thumbnailUrl: featuredImageUrl || null,
     });
 
@@ -130,11 +160,11 @@ export async function POST(request: NextRequest) {
 
     if (axios.isAxiosError(error)) {
       if (error.response) {
-        errorMessage = `Failed to fetch URL: ${error.response.status} ${error.response.statusText}. Check if the URL is accessible.`;
-        statusCode = error.response.status;
+        errorMessage = `Failed to fetch URL: ${error.response.status} ${error.response.statusText}. Check if the URL is accessible and not blocking requests.`;
+        statusCode = error.response.status >= 400 ? error.response.status : 500;
       } else if (error.request) {
         errorMessage = 'Failed to fetch URL: No response received. The site might be down or blocking requests.';
-        statusCode = 504; // Gateway Timeout
+        statusCode = 504; 
       } else {
         errorMessage = `Failed to fetch URL: ${error.message}`;
       }
