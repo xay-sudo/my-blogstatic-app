@@ -29,7 +29,7 @@ export default function CommentSection() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground text-center pt-2">
-            This is a placeholder for comments. A third-party service (like Disqus, Commento, etc.) or a custom backend would need to be integrated to enable actual commenting.
+            Comments are placeholders. A third-party service (like Disqus, Commento, etc.) or a custom backend would need to be integrated to enable actual commenting. All comments would be subject to admin approval.
           </p>
         </CardContent>
       </Card>
