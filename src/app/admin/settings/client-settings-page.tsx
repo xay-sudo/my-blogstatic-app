@@ -161,6 +161,11 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const watchedBannerType = form.watch('bannerType');
   const watchedBannerEnabled = form.watch('bannerEnabled');
   const watchedAdminUsername = form.watch('adminUsername');
+  const watchedAdminPassword = form.watch('adminPassword'); // Watch the password field
+
+  const isSaveButtonDisabled = isSubmitting || 
+    (!form.formState.isDirty && (!watchedAdminPassword || watchedAdminPassword.length === 0));
+
 
   const onSubmit = async (data: SiteSettingsFormValues) => {
     setIsSubmitting(true);
@@ -437,7 +442,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
             </Tabs>
             
             <div className="flex justify-end pt-4">
-              <Button type="submit" variant="primary" disabled={isSubmitting || !form.formState.isDirty}>
+              <Button type="submit" variant="primary" disabled={isSaveButtonDisabled}>
                 {isSubmitting ? (
                   <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                 ) : (
