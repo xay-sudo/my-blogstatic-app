@@ -11,13 +11,6 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: [
-      // Removed Firebase Storage pattern
-      // {
-      //   protocol: 'https',
-      //   hostname: 'firebasestorage.googleapis.com',
-      //   port: '',
-      //   pathname: '/**',
-      // },
       {
         protocol: 'https',
         hostname: 'placehold.co', // For placeholder images
@@ -26,7 +19,13 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '*.*', // Allow all HTTPS image sources
+        hostname: process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname : undefined,
+        port: '',
+        pathname: '/storage/v1/object/public/**', // Allow images from Supabase storage
+      },
+      {
+        protocol: 'https',
+        hostname: '*.*', // Allow all OTHER HTTPS image sources
         port: '',
         pathname: '/**',
       },
@@ -53,5 +52,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-    

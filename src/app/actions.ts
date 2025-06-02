@@ -7,19 +7,12 @@ import * as postService from '@/lib/post-service';
 import * as settingsService from '@/lib/settings-service';
 import type { Post, SiteSettings } from '@/types';
 import * as z from 'zod';
-import fs from 'fs/promises';
-import path from 'path';
-import { ensureDir } from 'fs-extra';
 import { cookies } from 'next/headers';
+import { supabase } from '@/lib/supabase-client'; // Import Supabase client
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
-const UPLOADS_DIR_NAME = 'uploads';
-const THUMBNAILS_SUBDIR_NAME = 'thumbnails';
-const PUBLIC_UPLOADS_PATH = `/${UPLOADS_DIR_NAME}/${THUMBNAILS_SUBDIR_NAME}`;
-const SERVER_UPLOADS_FULL_PATH = path.join(process.cwd(), 'public', UPLOADS_DIR_NAME, THUMBNAILS_SUBDIR_NAME);
-
+const SUPABASE_BUCKET_NAME = 'post-thumbnails'; // Ensure this bucket exists and is public in your Supabase project
 
 const postTextFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
@@ -35,7 +28,7 @@ const postTextFormSchema = z.object({
 
 export type PostServiceValues = Omit<Post, 'id' | 'date'>;
 
-async function handleLocalFileUpload(file: File | undefined): Promise<string | undefined> {
+async function handleSupabaseFileUpload(file: File | undefined): Promise<string | undefined> {
   if (!file) return undefined;
 
   if (file.size > MAX_FILE_SIZE) {
@@ -45,48 +38,87 @@ async function handleLocalFileUpload(file: File | undefined): Promise<string | u
     throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
   }
 
-  try {
-    await ensureDir(SERVER_UPLOADS_FULL_PATH);
-  } catch (error: any) {
-    console.error("Error creating uploads directory:", error);
-    throw new Error(`Server error: Could not prepare uploads directory. Check server permissions. Details: ${error.message}`);
-  }
-
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
   const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
-  const filename = `${file.name.replace(/\.[^/.]+$/, "")}-${uniqueSuffix}${extension}`;
-  const filePath = path.join(SERVER_UPLOADS_FULL_PATH, filename);
-  const publicUrl = `${PUBLIC_UPLOADS_PATH}/${filename}`;
+  // Sanitize filename to prevent issues with Supabase paths, e.g., removing special characters other than '.', '-'
+  const sanitizedBaseName = (file.name.replace(/\.[^/.]+$/, "") || 'untitled').replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const filename = `${sanitizedBaseName}-${uniqueSuffix}${extension}`;
+  
+  // Path within the bucket, e.g., public/my-image-123.png
+  // Storing in a 'public/' folder within the bucket is a common convention but not strictly necessary
+  // if the bucket itself is public.
+  const filePathInBucket = `public/${filename}`;
 
-  try {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await fs.writeFile(filePath, buffer);
-    return publicUrl;
-  } catch (error: any) {
-    console.error("Error saving uploaded file:", error);
-    throw new Error(`Could not save uploaded file. Details: ${error.message}`);
+
+  const { data, error } = await supabase.storage
+    .from(SUPABASE_BUCKET_NAME)
+    .upload(filePathInBucket, file, {
+      cacheControl: '3600', // Cache for 1 hour
+      upsert: false, // Don't overwrite if file exists (should be unique due to suffix)
+    });
+
+  if (error) {
+    console.error("Error uploading to Supabase Storage:", error);
+    throw new Error(`Could not upload file to cloud storage. Details: ${error.message}. Ensure bucket '${SUPABASE_BUCKET_NAME}' exists and is public, and RLS policies allow uploads.`);
   }
+
+  // Construct the public URL
+  // The path in Supabase Storage is data.path
+  const { data: publicUrlData } = supabase.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
+  
+  if (!publicUrlData || !publicUrlData.publicUrl) {
+      console.error("Could not get public URL for Supabase file:", data.path);
+      // Attempt to delete the uploaded file if URL retrieval fails to avoid orphaned files
+      await supabase.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]);
+      throw new Error("File uploaded, but could not retrieve its public URL.");
+  }
+  
+  return publicUrlData.publicUrl;
 }
 
-async function deleteLocalFile(fileUrl: string | undefined) {
-  if (!fileUrl || !fileUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
-    console.warn('Skipping deletion for non-local or invalid file URL:', fileUrl);
+async function deleteSupabaseFile(fileUrl: string | undefined) {
+  if (!fileUrl) {
+    console.warn('No file URL provided for deletion from Supabase.');
     return;
   }
+  
+  // Extract the file path from the Supabase public URL
+  // Example URL: https://<project-ref>.supabase.co/storage/v1/object/public/<bucket-name>/<file-path-in-bucket>
+  // We need to extract <file-path-in-bucket>
   try {
-    const filename = path.basename(fileUrl);
-    const filePath = path.join(SERVER_UPLOADS_FULL_PATH, filename);
-    await fs.unlink(filePath);
-    console.log('Successfully deleted local file:', filePath);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      console.warn('File not found locally, skipping delete:', fileUrl);
-    } else {
-      console.error('Failed to delete local file:', fileUrl, error);
+    const url = new URL(fileUrl);
+    const pathParts = url.pathname.split('/');
+    // The actual file path starts after "/object/public/<bucket-name>/"
+    // So, if bucket name is at index 5, path starts from index 6
+    const bucketNameIndex = pathParts.indexOf(SUPABASE_BUCKET_NAME);
+    if (bucketNameIndex === -1 || bucketNameIndex + 1 >= pathParts.length) {
+        console.error('Could not parse file path from Supabase URL:', fileUrl);
+        return;
     }
+    const filePathInBucket = pathParts.slice(bucketNameIndex + 1).join('/');
+
+    if (!filePathInBucket) {
+        console.error('Empty file path extracted from Supabase URL:', fileUrl);
+        return;
+    }
+
+    const { error } = await supabase.storage
+      .from(SUPABASE_BUCKET_NAME)
+      .remove([filePathInBucket]);
+
+    if (error) {
+      // It's common for delete to fail if RLS policies are restrictive or if file was already deleted.
+      // Log as a warning rather than throwing an error that breaks the flow,
+      // unless strict cleanup is absolutely critical.
+      console.warn('Failed to delete file from Supabase Storage:', filePathInBucket, error.message);
+    } else {
+      console.log('Successfully deleted file from Supabase Storage:', filePathInBucket);
+    }
+  } catch (error: any) {
+    console.error('Error parsing or deleting Supabase file URL:', fileUrl, error.message);
   }
 }
+
 
 export async function createPostAction(formData: FormData) {
   const rawData = {
@@ -111,7 +143,7 @@ export async function createPostAction(formData: FormData) {
 
   try {
     if (thumbnailFile && thumbnailFile.size > 0) {
-      thumbnailUrl = await handleLocalFileUpload(thumbnailFile);
+      thumbnailUrl = await handleSupabaseFileUpload(thumbnailFile);
     }
 
     const postData: PostServiceValues = {
@@ -123,7 +155,8 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    if (thumbnailUrl) await deleteLocalFile(thumbnailUrl); 
+    // If upload happened but post creation failed, try to delete the orphaned Supabase file
+    if (thumbnailUrl) await deleteSupabaseFile(thumbnailUrl); 
     return {
       success: false,
       message: error.message || 'Could not create post.',
@@ -168,10 +201,11 @@ export async function updatePostAction(postId: string, formData: FormData) {
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
-      if (currentThumbnailUrl && currentThumbnailUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
-        await deleteLocalFile(currentThumbnailUrl);
+      // If there was an old thumbnail on Supabase, delete it
+      if (currentThumbnailUrl) {
+        await deleteSupabaseFile(currentThumbnailUrl);
       }
-      newUrlUploaded = await handleLocalFileUpload(newThumbnailFile);
+      newUrlUploaded = await handleSupabaseFileUpload(newThumbnailFile);
       finalThumbnailUrl = newUrlUploaded;
     } else {
       finalThumbnailUrl = currentThumbnailUrl; 
@@ -185,7 +219,8 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
+      // If update failed but a new image was uploaded, delete the new orphaned image
+      if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
       return {
         success: false,
         message: 'Post not found or could not be updated.',
@@ -194,7 +229,7 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
-    if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
+    if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded); // Cleanup on error
     return {
       success: false,
       message: error.message || 'Could not update post.',
@@ -213,10 +248,11 @@ export async function updatePostAction(postId: string, formData: FormData) {
 export async function deletePostAction(postId: string) {
   try {
     const postToDelete = await postService.getPostById(postId);
-    if (postToDelete?.thumbnailUrl && postToDelete.thumbnailUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
-      await deleteLocalFile(postToDelete.thumbnailUrl);
+    if (postToDelete?.thumbnailUrl) {
+      // Delete the associated image from Supabase Storage
+      await deleteSupabaseFile(postToDelete.thumbnailUrl);
     }
-    await postService.deletePostById(postId);
+    await postService.deletePostById(postId); // Delete post data from posts.json
     revalidatePath('/');
     revalidatePath('/admin/posts');
     return { success: true, message: 'Post deleted successfully.' };
@@ -356,12 +392,9 @@ export async function loginAction(
       sameSite: 'lax',
     });
     revalidatePath('/admin');
-    revalidatePath('/login'); // Revalidate login page too
-    redirect('/admin'); // Perform redirect directly from server action
-    // The following return will not be reached if redirect() is called,
-    // but it satisfies the function signature for useActionState if redirect was conditional.
-    // In this case, redirect always happens on success.
-    // return { message: 'Login successful!', success: true }; 
+    revalidatePath('/login'); 
+    redirect('/admin'); 
+   
   } else {
     return { message: 'Invalid username or password.', success: false };
   }
