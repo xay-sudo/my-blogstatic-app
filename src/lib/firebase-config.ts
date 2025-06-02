@@ -65,21 +65,18 @@ if (typeof window !== 'undefined') {
   }
 } else {
   // This block is for server-side.
+  // Initialize if critical configs are present and no apps initialized yet.
   if (!getApps().length && firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.storageBucket) {
-      // @ts-ignore
       app = initializeApp(firebaseConfig);
-      // @ts-ignore
       auth = getAuth(app);
-      // @ts-ignore
       storage = getStorage(app);
-  } else if (getApps().length) {
-      // @ts-ignore
+  } else if (getApps().length) { // If apps are initialized, get the default one
       app = getApp();
-      // @ts-ignore
       auth = getAuth(app);
-      // @ts-ignore
       storage = getStorage(app);
   } else {
+      // Fallback if no apps and critical config missing server-side (less ideal, but prevents crashes)
+      console.warn("Firebase server-side initialization skipped due to missing critical configuration or no existing app.");
       // @ts-ignore
       app = undefined; 
       // @ts-ignore

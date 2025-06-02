@@ -11,7 +11,12 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: [
-      // Removed Firebase Storage pattern
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com', // For Firebase Storage
+        port: '',
+        pathname: '/**',
+      },
       {
         protocol: 'https',
         hostname: 'placehold.co', // For placeholder images
