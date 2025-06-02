@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, FileText, LayoutDashboard, Settings, LogOut } from 'lucide-react';
+import { Home, FileText, LayoutDashboard, Settings, LogOut, MessagesSquare } from 'lucide-react'; // Added MessagesSquare
 import { logoutAction } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { useTransition } from 'react';
@@ -53,6 +53,13 @@ export default function AdminLayout({
           >
             <FileText className="w-5 h-5" />
             <span>Manage Posts</span>
+          </Link>
+          <Link 
+            href="/admin/comments" 
+            className="flex items-center space-x-3 p-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors text-sm font-medium"
+          >
+            <MessagesSquare className="w-5 h-5" />
+            <span>Manage Comments</span>
           </Link>
           <Link 
             href="/admin/settings" 

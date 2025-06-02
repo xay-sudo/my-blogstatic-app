@@ -24,3 +24,15 @@ export interface SiteSettings {
   globalFooterScriptsEnabled?: boolean;
   globalFooterScriptsCustomHtml?: string;
 }
+
+export interface Comment {
+  id: string;
+  postId: string; // To link to the post
+  postSlug?: string; // For linking from admin
+  postTitle?: string; // For display in admin
+  authorName: string;
+  authorEmail?: string; // Optional
+  content: string;
+  date: string; // ISO string
+  status: 'pending' | 'approved' | 'rejected';
+}
