@@ -215,6 +215,12 @@ const siteSettingsSchema = z.object({
   siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100),
   siteDescription: z.string().min(10, { message: 'Site description must be at least 10 characters long.' }).max(300),
   postsPerPage: z.coerce.number().int().min(1, { message: 'Must display at least 1 post per page.' }).max(50, { message: 'Cannot display more than 50 posts per page.' }),
+  bannerEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
+  bannerType: z.enum(['image', 'customHtml']).optional().default('image'),
+  bannerImageUrl: z.string().url({ message: 'Please enter a valid URL for the banner image.' }).optional().or(z.literal('')),
+  bannerImageLink: z.string().url({ message: 'Please enter a valid URL for the banner link.' }).optional().or(z.literal('')),
+  bannerImageAltText: z.string().max(120, {message: 'Alt text should be 120 characters or less.'}).optional(),
+  bannerCustomHtml: z.string().optional(),
 });
 
 export async function updateSiteSettingsAction(formData: FormData) {
@@ -222,6 +228,12 @@ export async function updateSiteSettingsAction(formData: FormData) {
     siteTitle: formData.get('siteTitle'),
     siteDescription: formData.get('siteDescription'),
     postsPerPage: formData.get('postsPerPage'),
+    bannerEnabled: formData.get('bannerEnabled'),
+    bannerType: formData.get('bannerType'),
+    bannerImageUrl: formData.get('bannerImageUrl'),
+    bannerImageLink: formData.get('bannerImageLink'),
+    bannerImageAltText: formData.get('bannerImageAltText'),
+    bannerCustomHtml: formData.get('bannerCustomHtml'),
   };
 
   const validation = siteSettingsSchema.safeParse(rawData);
@@ -236,12 +248,24 @@ export async function updateSiteSettingsAction(formData: FormData) {
   }
 
   try {
-    await settingsService.updateSettings(validation.data as SiteSettings);
-    revalidatePath('/'); // Revalidate homepage (for postsPerPage and metadata)
-    revalidatePath('/admin/settings'); // Revalidate the settings page itself
-    // Potentially revalidate all post pages if metadata depends on site title/desc globally
-    // For now, revalidatePath('/') should cover metadata in layout.
+    // Construct the settings object carefully
+    const settingsToUpdate: Partial<SiteSettings> = {
+      siteTitle: validation.data.siteTitle,
+      siteDescription: validation.data.siteDescription,
+      postsPerPage: validation.data.postsPerPage,
+      bannerEnabled: validation.data.bannerEnabled,
+      bannerType: validation.data.bannerType,
+      bannerImageUrl: validation.data.bannerImageUrl,
+      bannerImageLink: validation.data.bannerImageLink,
+      bannerImageAltText: validation.data.bannerImageAltText,
+      bannerCustomHtml: validation.data.bannerCustomHtml,
+    };
 
+
+    await settingsService.updateSettings(settingsToUpdate);
+    revalidatePath('/'); 
+    revalidatePath('/admin/settings'); 
+    
     return {
       success: true,
       message: 'Site settings updated successfully.',

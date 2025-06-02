@@ -11,6 +11,12 @@ const DEFAULT_SETTINGS: SiteSettings = {
   siteTitle: "Newstoday",
   siteDescription: "A modern blog platform with AI-powered tagging.",
   postsPerPage: 6,
+  bannerEnabled: false,
+  bannerType: 'image',
+  bannerImageUrl: '',
+  bannerImageLink: '',
+  bannerImageAltText: 'Banner',
+  bannerCustomHtml: '',
 };
 
 async function ensureSettingsFileExists(): Promise<void> {
@@ -49,6 +55,12 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
     if (isNaN(updatedSettings.postsPerPage) || updatedSettings.postsPerPage <= 0) {
         updatedSettings.postsPerPage = DEFAULT_SETTINGS.postsPerPage; // Fallback to default if invalid
     }
+
+    // Ensure bannerEnabled is boolean
+    if (typeof updatedSettings.bannerEnabled === 'string') {
+      updatedSettings.bannerEnabled = updatedSettings.bannerEnabled === 'true';
+    }
+
 
     const jsonData = JSON.stringify(updatedSettings, null, 2);
     await fs.writeFile(settingsFilePath, jsonData, 'utf-8');

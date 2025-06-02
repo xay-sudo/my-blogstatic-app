@@ -13,4 +13,11 @@ export interface SiteSettings {
   siteTitle: string;
   siteDescription: string;
   postsPerPage: number;
+  // Banner settings
+  bannerEnabled?: boolean;
+  bannerType?: 'image' | 'customHtml';
+  bannerImageUrl?: string;
+  bannerImageLink?: string;
+  bannerImageAltText?: string;
+  bannerCustomHtml?: string;
 }

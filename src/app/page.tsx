@@ -1,13 +1,12 @@
 
 import type { Post } from '@/types';
 import * as postService from '@/lib/post-service'; 
-import { getSettings } from '@/lib/settings-service'; // Import getSettings
+import { getSettings } from '@/lib/settings-service';
 import PostCard from '@/components/PostCard';
 import PaginationControlsClient from '@/components/PaginationControlsClient'; 
 import SearchBarClient from '@/components/SearchBarClient'; 
 import { Skeleton } from '@/components/ui/skeleton';
-
-// const POSTS_PER_PAGE = 6; // Will be replaced by settings
+import Image from 'next/image';
 
 interface HomePageProps {
   searchParams?: {
@@ -16,44 +15,10 @@ interface HomePageProps {
   };
 }
 
-// Loading skeleton for the home page post cards
-function HomePageLoadingSkeleton() {
-  // Use a default posts per page for skeleton to avoid awaiting settings here
-  const DEFAULT_POSTS_SKELETON = 6;
-  return (
-    <div className="space-y-8">
-      <div className="flex justify-center mb-8">
-        {/* Placeholder for banner in skeleton */}
-        <Skeleton className="h-[90px] w-full max-w-[728px]" />
-      </div>
-      <div className="flex justify-center mb-12">
-        <Skeleton className="h-10 w-full max-w-md" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[...Array(DEFAULT_POSTS_SKELETON)].map((_, index) => (
-          <div key={index} className="flex flex-col space-y-3 p-4 border rounded-lg bg-card shadow">
-            <Skeleton className="h-[200px] w-full rounded-xl" />
-            <div className="space-y-2 pt-2">
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="flex gap-2 mt-2">
-              <Skeleton className="h-6 w-16 rounded-full" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
 export default async function HomePage({ searchParams }: HomePageProps) {
   const allPosts = await postService.getAllPosts();
   const settings = await getSettings();
-  const postsPerPage = settings.postsPerPage > 0 ? settings.postsPerPage : 6; // Fallback
+  const postsPerPage = settings.postsPerPage > 0 ? settings.postsPerPage : 6;
 
   const currentPage = Number(searchParams?.page) || 1;
   const searchTerm = searchParams?.search || '';
@@ -73,18 +38,59 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
+  const renderBanner = () => {
+    if (!settings.bannerEnabled) {
+      return null;
+    }
+
+    if (settings.bannerType === 'image' && settings.bannerImageUrl) {
+      const bannerContent = (
+        <Image
+          src={settings.bannerImageUrl}
+          alt={settings.bannerImageAltText || 'Homepage Banner'}
+          width={728}
+          height={90}
+          className="mx-auto"
+          style={{ objectFit: 'contain' }}
+          data-ai-hint="advertisement banner"
+        />
+      );
+      if (settings.bannerImageLink) {
+        return (
+          <a href={settings.bannerImageLink} target="_blank" rel="noopener noreferrer">
+            {bannerContent}
+          </a>
+        );
+      }
+      return bannerContent;
+    }
+
+    if (settings.bannerType === 'customHtml' && settings.bannerCustomHtml) {
+      return (
+        <div
+          className="w-full max-w-[728px] h-[90px] mx-auto flex items-center justify-center"
+          dangerouslySetInnerHTML={{ __html: settings.bannerCustomHtml }}
+        />
+      );
+    }
+    
+    // Fallback for enabled but misconfigured banner
+    return (
+      <div 
+        style={{ width: '728px', height: '90px' }} 
+        className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground mx-auto"
+        aria-label="Homepage Banner Area"
+      >
+        Banner Misconfigured (728x90)
+      </div>
+    );
+  };
+
   if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
-          {/* Banner Section */}
           <div className="flex justify-center">
-            <div 
-              style={{ width: '728px', height: '90px' }} 
-              className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground"
-              aria-label="Homepage Banner Area"
-            >
-              Homepage Banner (728x90)
-            </div>
+            {renderBanner()}
           </div>
           <div className="flex justify-center">
              <SearchBarClient initialSearchTerm={searchTerm} />
@@ -96,18 +102,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
      )
   }
 
-
   return (
     <div className="space-y-12">
-      {/* Banner Section */}
       <div className="flex justify-center">
-        <div 
-          style={{ width: '728px', height: '90px' }} 
-          className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground"
-          aria-label="Homepage Banner Area"
-        >
-          Homepage Banner (728x90)
-        </div>
+        {renderBanner()}
       </div>
 
       <div className="flex justify-center">
