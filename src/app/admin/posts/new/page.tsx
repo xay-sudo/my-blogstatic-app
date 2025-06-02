@@ -1,10 +1,12 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react'; // Added useRef
+import { Editor } from '@tinymce/tinymce-react'; // Import TinyMCE Editor
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,7 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/textarea'; // Still used for excerpt
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation'; 
@@ -28,7 +30,7 @@ const postFormSchema = z.object({
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   excerpt: z.string().min(10, { message: 'Excerpt must be at least 10 characters long.' }).max(300, { message: 'Excerpt must be 300 characters or less.' }),
-  content: z.string().min(50, { message: 'Content must be at least 50 characters long.' }),
+  content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
   tags: z.string()
     .refine(value => value === '' || /^[a-zA-Z0-9\s,-]+$/.test(value), {
       message: 'Tags can only contain letters, numbers, spaces, commas, and hyphens.',
@@ -43,6 +45,7 @@ type PostFormValues = z.infer<typeof postFormSchema>;
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const editorRef = useRef<any>(null); // For TinyMCE editor instance
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postFormSchema),
@@ -50,8 +53,8 @@ export default function NewPostPage() {
       title: '',
       slug: '',
       excerpt: '',
-      content: '',
-      tags: [], // Stored as array internally, but input is string
+      content: '<p>Write your blog post content here...</p>', // Initial content for TinyMCE
+      tags: [], 
       imageUrl: '',
     },
     mode: 'onChange',
@@ -73,7 +76,6 @@ export default function NewPostPage() {
 
 
   const onSubmit = (data: PostFormValues) => {
-    // Ensure tags is an array, even if submitted as a string from the input
     const finalTags = Array.isArray(data.tags) ? data.tags : 
                       (typeof data.tags === 'string' ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []);
 
@@ -83,14 +85,6 @@ export default function NewPostPage() {
     };
 
     console.log('New post data (mock submission):', newPostData);
-    // In a real app, you would send this data to your backend.
-    // For now, mock adding to mock-posts (this won't persist or update other clients)
-    // import { mockPosts } from '@/lib/mock-posts'; // Not ideal to import here for actual modification
-    // mockPosts.unshift({
-    //   id: String(Date.now()),
-    //   date: new Date().toISOString(),
-    //   ...newPostData
-    // });
     
     toast({
       title: 'Post Created (Mock)',
@@ -111,7 +105,7 @@ export default function NewPostPage() {
             </Link>
           </Button>
         </div>
-        <CardDescription>Fill in the details below to publish a new blog post.</CardDescription>
+        <CardDescription>Fill in the details below to publish a new blog post. For production use with TinyMCE, obtain an API key from tiny.cloud.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -163,9 +157,32 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Content</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Write your blog post content here..." {...field} rows={12} />
+                    <Editor
+                      apiKey="no-api-key" // Replace with your TinyMCE API key for production
+                      onInit={(_evt, editor) => editorRef.current = editor}
+                      initialValue={field.value}
+                      onEditorChange={(content, _editor) => {
+                        field.onChange(content);
+                      }}
+                      init={{
+                        height: 500,
+                        menubar: 'file edit view insert format tools table help',
+                        plugins: [
+                          'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                          'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                          'insertdatetime', 'media', 'table', 'help', 'wordcount', 'codesample'
+                        ],
+                        toolbar: 'undo redo | blocks | ' +
+                        'bold italic forecolor backcolor | alignleft aligncenter ' +
+                        'alignright alignjustify | bullist numlist outdent indent | ' +
+                        'link image media codesample | removeformat | help',
+                        content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:16px }',
+                        skin: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oxide-dark' : 'oxide'),
+                        content_css: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default')
+                      }}
+                    />
                   </FormControl>
-                  <FormDescription>The main body of your post. Plain text for now.</FormDescription>
+                  <FormDescription>The main body of your post. Use the rich text editor for formatting.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -179,12 +196,9 @@ export default function NewPostPage() {
                   <FormControl>
                     <Input 
                       placeholder="e.g., nextjs, react, webdev"
-                      // The field.value from RHF (after Zod transform) will be an array.
-                      // We convert it back to string for display in input.
-                      // Zod transform handles string to array on submit.
                       {...field}
                       value={Array.isArray(field.value) ? field.value.join(', ') : (field.value || '')}
-                      onChange={(e) => field.onChange(e.target.value)} // RHF expects the raw input value
+                      onChange={(e) => field.onChange(e.target.value)}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -219,4 +233,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
