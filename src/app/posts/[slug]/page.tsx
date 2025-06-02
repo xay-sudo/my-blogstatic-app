@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
     };
   }
   return {
-    title: `${post.title} | Blogstatic`,
+    title: `${post.title} | Newstoday`,
     description: post.content.substring(0, 150).replace(/<[^>]*>?/gm, ''), 
   };
 }

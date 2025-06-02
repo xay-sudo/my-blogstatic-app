@@ -1,4 +1,5 @@
-# Firebase Studio
+
+# Newstoday
 
 This is a NextJS starter in Firebase Studio.
 

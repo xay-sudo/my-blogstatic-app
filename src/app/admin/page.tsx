@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -8,7 +9,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-8">
       <header className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to the Blogstatic admin panel. Manage your content and settings here.</p>
+        <p className="text-muted-foreground">Welcome to the Newstoday admin panel. Manage your content and settings here.</p>
       </header>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

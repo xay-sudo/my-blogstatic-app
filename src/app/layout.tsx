@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { AuthProvider } from '@/contexts/AuthContext'; // Import AuthProvider
 
 export const metadata: Metadata = {
-  title: 'Blogstatic',
+  title: 'Newstoday',
   description: 'A modern blog platform with AI-powered tagging.',
 };
 
@@ -31,7 +31,7 @@ export default function RootLayout({
           </main>
           <Toaster />
           <footer className="py-6 text-center text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Blogstatic. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Newstoday. All rights reserved.</p>
           </footer>
         </AuthProvider>
       </body>

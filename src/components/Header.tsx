@@ -12,7 +12,7 @@ export default function Header() {
     <header className="bg-card border-b sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
         <Link href="/" className="text-3xl font-headline text-primary hover:opacity-80 transition-opacity">
-          Blogstatic
+          Newstoday
         </Link>
         <nav>
           {/* Only show Admin link if logged in and not loading */}
