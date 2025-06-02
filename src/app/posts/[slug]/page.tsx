@@ -4,9 +4,11 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import { CalendarDays, Eye } from 'lucide-react'; // Added Eye icon
+import { CalendarDays, Eye } from 'lucide-react'; 
 import PostCard from '@/components/PostCard'; 
 import type { Post } from '@/types'; 
+import SocialShareButtons from '@/components/SocialShareButtons';
+import { headers } from 'next/headers'; // For constructing URL
 
 interface PostPageProps {
   params: {
@@ -41,15 +43,11 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  // Increment view count and get the new count
   const newViewCount = await postService.incrementViewCount(post.id);
 
-  // Update the post object for the current render if the increment was successful
   if (newViewCount !== null) {
     post = { ...post, viewCount: newViewCount };
   }
-  // If newViewCount is null, an error occurred during increment,
-  // so we'll display the viewCount fetched initially.
 
   const formattedDate = new Date(post.date).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -57,19 +55,34 @@ export default async function PostPage({ params }: PostPageProps) {
     day: 'numeric',
   });
 
-  // Fetch all posts for related posts logic
   const allPosts = await postService.getAllPosts();
   let relatedPosts: Post[] = [];
 
   if (post.tags && post.tags.length > 0) {
     relatedPosts = allPosts.filter(otherPost => {
-      if (otherPost.id === post.id) return false; // Exclude current post
+      if (otherPost.id === post.id) return false; 
       return otherPost.tags.some(tag => post.tags.includes(tag));
-    }).slice(0, 3); // Get up to 3 related posts
+    }).slice(0, 3); 
   } else {
-    // Fallback: if current post has no tags, show 3 latest posts (excluding current)
     relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 3);
   }
+
+  // Construct the full post URL for sharing
+  const FALLBACK_SITE_URL = 'http://localhost:3000'; // Update if deployed and env var not set
+  let baseUrlToUse = process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (!baseUrlToUse) {
+    const headersList = headers();
+    const hostHeader = headersList.get('host');
+    const protocolHeader = headersList.get('x-forwarded-proto') || (hostHeader?.includes('localhost') ? 'http' : 'https');
+    if (hostHeader) {
+      baseUrlToUse = `${protocolHeader}://${hostHeader}`;
+    } else {
+      baseUrlToUse = FALLBACK_SITE_URL;
+    }
+  }
+  const postUrl = `${baseUrlToUse}/posts/${post.slug}`;
+  const pageDescription = post.content.substring(0, 160).replace(/<[^>]*>?/gm, '').trim() + '...';
 
 
   return (
@@ -108,16 +121,25 @@ export default async function PostPage({ params }: PostPageProps) {
           dangerouslySetInnerHTML={{ __html: post.content }}
         />
 
-        {post.tags && post.tags.length > 0 && (
+        {(post.tags && post.tags.length > 0) || postUrl ? (
           <footer className="mt-12 pt-8 border-t">
-            <h3 className="text-lg font-semibold mb-3 font-headline">Tags:</h3>
-            <div className="flex flex-wrap gap-3">
-              {post.tags.map((tag) => (
-                <TagBadge key={tag} tag={tag} />
-              ))}
-            </div>
+            {post.tags && post.tags.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-3 font-headline">Tags:</h3>
+                <div className="flex flex-wrap gap-3">
+                  {post.tags.map((tag) => (
+                    <TagBadge key={tag} tag={tag} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <SocialShareButtons 
+              postUrl={postUrl} 
+              postTitle={post.title} 
+              postDescription={pageDescription}
+            />
           </footer>
-        )}
+        ) : null}
       </article>
 
       {relatedPosts.length > 0 && (
@@ -133,4 +155,3 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
-
