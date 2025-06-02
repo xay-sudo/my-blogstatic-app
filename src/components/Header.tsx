@@ -4,12 +4,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { ShieldCheck } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+// useAuth removed
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { Suspense } from 'react'; // Import Suspense
+import React, { Suspense } from 'react';
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -26,7 +26,7 @@ function SearchBarFallback() {
 }
 
 export default function Header({ siteSettings }: HeaderProps) {
-  const { isAdminLoggedIn, isLoadingAuth } = useAuth();
+  // isAdminLoggedIn, isLoadingAuth removed
 
   const renderHeaderAdSlot = () => {
     if (!siteSettings) {
@@ -115,14 +115,11 @@ export default function Header({ siteSettings }: HeaderProps) {
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            {isLoadingAuth ? (
-              <Skeleton className="h-5 w-20" /> 
-            ) : isAdminLoggedIn ? (
-              <Link href="/admin" className="flex items-center text-sm hover:text-primary transition-colors">
-                <ShieldCheck className="w-5 h-5 mr-1" />
-                Admin
-              </Link>
-            ) : null}
+            {/* Admin link is now always visible as auth is removed */}
+            <Link href="/admin" className="flex items-center text-sm hover:text-primary transition-colors">
+              <ShieldCheck className="w-5 h-5 mr-1" />
+              Admin
+            </Link>
           </div>
           <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
             <Suspense fallback={<SearchBarFallback />}>

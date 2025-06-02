@@ -28,9 +28,8 @@ import { updatePostAction } from '@/app/actions';
 import type { Post } from '@/types';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
+// useAuth removed
 
-// Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(150, { message: 'Slug must be 150 characters or less.' })
@@ -54,7 +53,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const router = useRouter();
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
-  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Added from useAuth
+  // isAdminLoggedIn, isLoadingAuth removed
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null); 
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(initialPostData.thumbnailUrl || null); 
@@ -105,10 +104,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   };
 
   const handleSuggestTags = async () => {
-    if (isLoadingAuth || !isAdminLoggedIn) {
-      toast({ variant: 'destructive', title: 'Unauthorized', description: 'You do not have permission to suggest tags.' });
-      return;
-    }
+    // Auth check removed
     const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
     if (!content || content.trim().length < 50) {
       setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
@@ -155,15 +151,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   };
 
   const onSubmit = async (data: PostFormClientValues) => {
-    if (isLoadingAuth || !isAdminLoggedIn) {
-      toast({
-        variant: 'destructive',
-        title: 'Unauthorized',
-        description: 'You do not have permission to update posts.',
-      });
-      setIsSubmittingForm(false);
-      return;
-    }
+    // Auth check removed
     setIsSubmittingForm(true);
         
     const validationResult = await form.trigger();
@@ -251,7 +239,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags} /> {/* Auth disable removed */}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -264,7 +252,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags}/> {/* Auth disable removed */}
                   </FormControl>
                   <FormDescription>URL-friendly version of the title.</FormDescription>
                   <FormMessage />
@@ -280,7 +268,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
+                  disabled={isSubmittingForm || isSuggestingTags} /* Auth disable removed */
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -309,7 +297,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                         field.onChange(content); 
                         form.trigger('content'); 
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
+                      disabled={isSubmittingForm || isSuggestingTags} /* Auth disable removed */
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -343,7 +331,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
+                      disabled={isSubmittingForm || isSuggestingTags} /* Auth disable removed */
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -352,7 +340,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isLoadingAuth || !isAdminLoggedIn}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 } /* Auth disable removed */
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -402,10 +390,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags}> {/* Auth disable removed */}
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}> {/* Auth disable removed */}
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -425,4 +413,3 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     </Card>
   );
 }
-    

@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card'; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
-import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye } from 'lucide-react'; // Added Eye icon
-import { Skeleton } from '@/components/ui/skeleton';
+import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye } from 'lucide-react';
+// Skeleton removed as auth loading is gone
 import { useToast } from '@/hooks/use-toast';
 import { deletePostAction } from '@/app/actions'; 
 import {
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from '@/contexts/AuthContext'; 
+// useAuth removed
 
 interface AdminPostsClientPageProps {
   initialPosts: Post[];
@@ -33,22 +33,14 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
   const [isLoading, setIsLoading] = useState(false); 
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition(); 
-  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); 
+  // isAdminLoggedIn, isLoadingAuth removed
 
   useEffect(() => {
     setPosts(initialPosts);
   }, [initialPosts]);
 
   const handleDeletePost = async (postId: string, postTitle: string) => {
-    if (isLoadingAuth || !isAdminLoggedIn) {
-      toast({
-        variant: 'destructive',
-        title: 'Unauthorized',
-        description: 'You do not have permission to delete posts.',
-      });
-      return;
-    }
-
+    // Authorization check removed
     startTransition(async () => {
       setIsLoading(true); 
       const result = await deletePostAction(postId);
@@ -87,7 +79,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           </p>
         </div>
         <Link href="/admin/posts/new">
-          <Button variant="primary" disabled={isLoadingAuth || !isAdminLoggedIn}>
+          <Button variant="primary"> {/* disabled state based on auth removed */}
             <PlusCircle className="w-5 h-5 mr-2" />
             Create New Post
           </Button>
@@ -142,15 +134,16 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                              <ExternalLink className="w-4 h-4" />
                           </Link>
                        </Button>
-                      <Button variant="ghost" size="icon" asChild title="Edit Post" disabled={isLoadingAuth || !isAdminLoggedIn}>
+                      <Button variant="ghost" size="icon" asChild title="Edit Post"> {/* disabled state based on auth removed */}
                           <Link href={`/admin/posts/edit/${post.id}`}>
                              <Edit2 className="w-4 h-4" />
                           </Link>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" title="Delete Post" disabled={isPending || isLoading || isLoadingAuth || !isAdminLoggedIn}>
-                            {(isPending || isLoading) && !isLoadingAuth ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
+                           {/* disabled state based on auth removed */}
+                          <Button variant="ghost" size="icon" title="Delete Post" disabled={isPending || isLoading}>
+                            {(isPending || isLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -161,13 +154,13 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isPending || isLoading || isLoadingAuth}>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel disabled={isPending || isLoading}>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeletePost(post.id, post.title)}
-                              disabled={isPending || isLoading || isLoadingAuth || !isAdminLoggedIn}
+                              disabled={isPending || isLoading} // disabled state based on auth removed
                               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                             >
-                              {(isPending || isLoading) && !isLoadingAuth ? 'Deleting...' : 'Delete'}
+                              {(isPending || isLoading) ? 'Deleting...' : 'Delete'}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
