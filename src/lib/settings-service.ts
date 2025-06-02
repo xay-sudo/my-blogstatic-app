@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS_OBJ: SiteSettings = {
   bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
+  globalHeaderScriptsEnabled: false,
+  globalHeaderScriptsCustomHtml: '',
   globalFooterScriptsEnabled: false,
   globalFooterScriptsCustomHtml: '',
 };
@@ -223,6 +225,15 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
       mergedSettings.adminPassword = String(newSettings.adminPassword ?? '');
   }
 
+  if (typeof mergedSettings.globalHeaderScriptsEnabled === 'string') {
+    mergedSettings.globalHeaderScriptsEnabled = mergedSettings.globalHeaderScriptsEnabled === 'on' || mergedSettings.globalHeaderScriptsEnabled === 'true';
+  } else if (typeof mergedSettings.globalHeaderScriptsEnabled === 'undefined') {
+    mergedSettings.globalHeaderScriptsEnabled = false;
+  }
+  if (newSettings.hasOwnProperty('globalHeaderScriptsCustomHtml')) {
+      mergedSettings.globalHeaderScriptsCustomHtml = String(newSettings.globalHeaderScriptsCustomHtml ?? '');
+  }
+
   if (typeof mergedSettings.globalFooterScriptsEnabled === 'string') {
     mergedSettings.globalFooterScriptsEnabled = mergedSettings.globalFooterScriptsEnabled === 'on' || mergedSettings.globalFooterScriptsEnabled === 'true';
   } else if (typeof mergedSettings.globalFooterScriptsEnabled === 'undefined') {
@@ -254,3 +265,4 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
 if (typeof window === 'undefined') {
  // Defer actual seeding to first function call.
 }
+

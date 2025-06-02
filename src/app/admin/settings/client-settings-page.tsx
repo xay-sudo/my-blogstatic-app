@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 as Loader2Icon, Save, Image as ImageIcon, Code, ShieldAlert, ShieldCheck, TerminalSquare } from 'lucide-react';
+import { Loader2 as Loader2Icon, Save, Image as ImageIcon, Code, ShieldAlert, ShieldCheck, TerminalSquare, Heading1 } from 'lucide-react';
 import { updateSiteSettingsAction } from '@/app/actions'; 
 import type { SiteSettings } from '@/types';
 import { Switch } from '@/components/ui/switch';
@@ -43,6 +43,8 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
+  globalHeaderScriptsEnabled: false,
+  globalHeaderScriptsCustomHtml: '',
   globalFooterScriptsEnabled: false,
   globalFooterScriptsCustomHtml: '',
 };
@@ -64,6 +66,8 @@ const siteSettingsFormSchema = z.object({
   bannerCustomHtml: z.string().optional(),
   adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
+  globalHeaderScriptsEnabled: z.boolean().default(false),
+  globalHeaderScriptsCustomHtml: z.string().optional(),
   globalFooterScriptsEnabled: z.boolean().default(false),
   globalFooterScriptsCustomHtml: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -86,6 +90,14 @@ const siteSettingsFormSchema = z.object({
     }
   }
   
+  if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Custom HTML for header scripts is required when enabled.',
+      path: ['globalHeaderScriptsCustomHtml'],
+    });
+  }
+
   if (data.globalFooterScriptsEnabled && (!data.globalFooterScriptsCustomHtml || data.globalFooterScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -155,6 +167,8 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '', 
+      globalHeaderScriptsEnabled: propsInitialSettings?.globalHeaderScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsEnabled,
+      globalHeaderScriptsCustomHtml: propsInitialSettings?.globalHeaderScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsCustomHtml,
       globalFooterScriptsEnabled: propsInitialSettings?.globalFooterScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsEnabled,
       globalFooterScriptsCustomHtml: propsInitialSettings?.globalFooterScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsCustomHtml,
     },
@@ -175,6 +189,8 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '',
+      globalHeaderScriptsEnabled: propsInitialSettings?.globalHeaderScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsEnabled,
+      globalHeaderScriptsCustomHtml: propsInitialSettings?.globalHeaderScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsCustomHtml,
       globalFooterScriptsEnabled: propsInitialSettings?.globalFooterScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsEnabled,
       globalFooterScriptsCustomHtml: propsInitialSettings?.globalFooterScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsCustomHtml,
     });
@@ -184,12 +200,14 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const watchedBannerEnabled = form.watch('bannerEnabled');
   const watchedAdminUsername = form.watch('adminUsername');
   const watchedAdminPassword = form.watch('adminPassword');
+  const watchedGlobalHeaderScriptsEnabled = form.watch('globalHeaderScriptsEnabled');
   const watchedGlobalFooterScriptsEnabled = form.watch('globalFooterScriptsEnabled');
 
   const generalSettingFields: (keyof SiteSettingsFormValues)[] = [
     'siteTitle', 'siteDescription', 'postsPerPage', 
     'bannerEnabled', 'bannerType', 'bannerImageUrl', 
     'bannerImageLink', 'bannerImageAltText', 'bannerCustomHtml',
+    'globalHeaderScriptsEnabled', 'globalHeaderScriptsCustomHtml',
     'globalFooterScriptsEnabled', 'globalFooterScriptsCustomHtml',
   ];
   const isAdminSettingsDirty = form.formState.dirtyFields.adminUsername || (watchedAdminPassword && watchedAdminPassword.length > 0);
@@ -214,6 +232,8 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('bannerImageAltText', data.bannerImageAltText || '');
     formData.append('bannerCustomHtml', data.bannerCustomHtml || '');
     formData.append('adminUsername', data.adminUsername || '');
+    formData.append('globalHeaderScriptsEnabled', data.globalHeaderScriptsEnabled ? 'on' : 'off');
+    formData.append('globalHeaderScriptsCustomHtml', data.globalHeaderScriptsCustomHtml || '');
     formData.append('globalFooterScriptsEnabled', data.globalFooterScriptsEnabled ? 'on' : 'off');
     formData.append('globalFooterScriptsCustomHtml', data.globalFooterScriptsCustomHtml || '');
 
@@ -425,6 +445,57 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                 </div>
 
                 <Separator />
+                
+                <div>
+                  <h3 className="text-lg font-medium mb-4 flex items-center">
+                    <Heading1 className="w-5 h-5 mr-2 text-primary" />
+                    Global Header Scripts
+                  </h3>
+                  <FormField
+                    control={form.control}
+                    name="globalHeaderScriptsEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>Enable Global Header Scripts</FormLabel>
+                          <FormDescription>Inject custom HTML/scripts into the &lt;head&gt; tag.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  {watchedGlobalHeaderScriptsEnabled && (
+                     <div className="mt-6 space-y-6 pl-2 border-l-2 border-primary/50 ml-1">
+                        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+                            <FormField
+                                control={form.control}
+                                name="globalHeaderScriptsCustomHtml"
+                                render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Custom HTML/Script for Header</FormLabel>
+                                    <FormControl>
+                                    <Textarea
+                                        placeholder="<!-- Your analytics, meta tags, or other head scripts here -->"
+                                        {...field}
+                                        rows={8}
+                                        disabled={isSubmitting}
+                                    />
+                                    </FormControl>
+                                    <FormDescription>
+                                    This code will be injected on all pages inside the &lt;head&gt; tag.
+                                    </FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
 
                 <div>
                   <h3 className="text-lg font-medium mb-4 flex items-center">
@@ -562,3 +633,4 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     </Card>
   );
 }
+

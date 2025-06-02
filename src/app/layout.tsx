@@ -34,6 +34,12 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        {settings.globalHeaderScriptsEnabled && settings.globalHeaderScriptsCustomHtml && (
+          <RenderHtmlContent
+            htmlString={settings.globalHeaderScriptsCustomHtml}
+            // No specific className or placeholderStyle needed for invisible header scripts by default
+          />
+        )}
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
         <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
@@ -54,3 +60,4 @@ export default async function RootLayout({
     </html>
   );
 }
+

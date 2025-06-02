@@ -331,6 +331,8 @@ const siteSettingsSchema = z.object({
   bannerCustomHtml: z.string().optional(),
   adminUsername: z.string().max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().max(100, {message: "Admin password must be 100 characters or less."}).optional(),
+  globalHeaderScriptsEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
+  globalHeaderScriptsCustomHtml: z.string().optional(),
   globalFooterScriptsEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
   globalFooterScriptsCustomHtml: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -351,6 +353,13 @@ const siteSettingsSchema = z.object({
         path: ['bannerCustomHtml'],
       });
     }
+  }
+  if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Custom HTML for header scripts is required when enabled.',
+      path: ['globalHeaderScriptsCustomHtml'],
+    });
   }
   if (data.globalFooterScriptsEnabled && (!data.globalFooterScriptsCustomHtml || data.globalFooterScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
@@ -375,6 +384,8 @@ export async function updateSiteSettingsAction(formData: FormData) {
     bannerCustomHtml: formData.get('bannerCustomHtml'),
     adminUsername: formData.get('adminUsername'),
     adminPassword: formData.get('adminPassword'),
+    globalHeaderScriptsEnabled: formData.get('globalHeaderScriptsEnabled'),
+    globalHeaderScriptsCustomHtml: formData.get('globalHeaderScriptsCustomHtml'),
     globalFooterScriptsEnabled: formData.get('globalFooterScriptsEnabled'),
     globalFooterScriptsCustomHtml: formData.get('globalFooterScriptsCustomHtml'),
   };
@@ -440,6 +451,8 @@ export async function updateSiteSettingsAction(formData: FormData) {
       bannerImageAltText: validation.data.bannerImageAltText,
       bannerCustomHtml: validation.data.bannerCustomHtml,
       adminUsername: formUsername,
+      globalHeaderScriptsEnabled: validation.data.globalHeaderScriptsEnabled,
+      globalHeaderScriptsCustomHtml: validation.data.globalHeaderScriptsCustomHtml,
       globalFooterScriptsEnabled: validation.data.globalFooterScriptsEnabled,
       globalFooterScriptsCustomHtml: validation.data.globalFooterScriptsCustomHtml,
     };
@@ -519,3 +532,4 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
+
