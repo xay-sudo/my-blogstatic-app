@@ -102,7 +102,7 @@ export default function Header({ siteSettings }: HeaderProps) {
       {/* Main Header with Logo and Ad space */}
       <header className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-          <Link href="/" className="text-4xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
+          <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             News Today
           </Link>
           <div className="mt-4 sm:mt-0 sm:ml-auto" aria-label="Advertisement Area">
@@ -115,13 +115,9 @@ export default function Header({ siteSettings }: HeaderProps) {
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            {/* Admin link is now always visible as auth is removed */}
-            <Link href="/admin" className="flex items-center text-sm hover:text-primary transition-colors">
-              <ShieldCheck className="w-5 h-5 mr-1" />
-              Admin
-            </Link>
+            {/* Admin link removed from here */}
           </div>
-          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md ml-auto"> {/* Added ml-auto to push search to the right if no links are present */}
             <Suspense fallback={<SearchBarFallback />}>
               <SearchBarClient />
             </Suspense>
