@@ -16,6 +16,15 @@ import {
 } from 'firebase/auth';
 import type { AuthCredential } from 'firebase/auth'; // For type only
 
+// --- START: Admin Email Configuration ---
+// Add email addresses of users who should be considered administrators.
+// IMPORTANT: For production, consider a more secure backend solution for managing admin roles (e.g., Firebase Custom Claims or a Firestore collection).
+const ADMIN_EMAILS: string[] = [
+  'vanchhaydok@gmail.com',
+  // Add other admin emails here, e.g., 'admin@example.com'
+];
+// --- END: Admin Email Configuration ---
+
 export interface AuthFormValues {
   email: string;
   password?: string; // Password is not always needed, e.g. for OAuth
@@ -24,10 +33,10 @@ export interface AuthFormValues {
 
 interface AuthContextType {
   user: User | null; // Store the Firebase User object
-  isAdminLoggedIn: boolean | null; // null when loading, true/false otherwise
+  isAdminLoggedIn: boolean | null; // null when loading, true if admin, false otherwise
   signUpWithEmailPassword: (values: AuthFormValues) => Promise<void>;
   signInWithEmailPassword: (values: AuthFormValues) => Promise<void>;
-  signInWithGoogle: () => Promise<void>; // Added for Google Sign-In
+  signInWithGoogle: () => Promise<void>; 
   logoutAdmin: () => Promise<void>;
   isLoadingAuth: boolean;
   authError: string | null;
@@ -38,8 +47,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true); // Start as true
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true); 
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // Separate state for admin status
   const router = useRouter();
 
   useEffect(() => {
@@ -49,15 +59,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthError(initErrorMessage); 
       setIsLoadingAuth(false);
       setUser(null);
+      setIsAdmin(false); // Set admin status to false
       return; 
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setIsLoadingAuth(false);
       if (currentUser) {
-        setAuthError(null); 
+        // Check if the logged-in user is an admin
+        setIsAdmin(ADMIN_EMAILS.includes(currentUser.email || ''));
+        setAuthError(null);
+      } else {
+        setIsAdmin(false); // Not logged in, so not an admin
       }
+      setIsLoadingAuth(false);
     });
 
     return () => unsubscribe();
@@ -79,13 +94,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle setting user and admin status
     } catch (error: any) {
       console.error("Error signing up:", error);
       const displayError = error.message || "Failed to sign up. Please check your credentials or network.";
       setAuthError(displayError);
+      setIsLoadingAuth(false); // Ensure loading state is reset on error
       throw error; 
-    } finally {
-      setIsLoadingAuth(false);
     }
   }, []);
 
@@ -105,13 +120,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle setting user and admin status
     } catch (error: any) {
       console.error("Error signing in:", error);
       const displayError = error.message || "Failed to sign in. Please check your credentials or network.";
       setAuthError(displayError);
+      setIsLoadingAuth(false); // Ensure loading state is reset on error
       throw error; 
-    } finally {
-      setIsLoadingAuth(false);
     }
   }, []);
 
@@ -127,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      // onAuthStateChanged will handle setting the user and redirecting
+      // onAuthStateChanged will handle setting user and admin status
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
       let displayError = error.message || "Failed to sign in with Google.";
@@ -141,15 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         displayError = 'Network error during Google Sign-in. Please check your connection.';
       }
       setAuthError(displayError);
-      throw error; // Re-throw to be caught in the form if needed, or handled by UI
-    } finally {
-      // setIsLoadingAuth(false) will be handled by onAuthStateChanged
-      // or if auth.currentUser remains, set it explicitly.
-      if (auth.currentUser || !auth) setIsLoadingAuth(false);
+      setIsLoadingAuth(false); // Ensure loading state is reset on error
+      throw error; 
     }
   }, []);
 
-  const logoutAdmin = useCallback(async () => {
+  const logoutAdmin = useCallback(async () => { // Renaming implies it was for admins, but it signs out any user
     if (!auth) {
       const errMessage = "Logout failed: Firebase auth is not properly initialized. Check deployment configuration.";
       setAuthError(errMessage);
@@ -160,26 +172,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     try {
       await firebaseSignOut(auth);
+      // onAuthStateChanged will set user to null and isAdmin to false
       router.push('/'); 
     } catch (error: any)
     {
       console.error("Error signing out:", error);
       const displayError = error.message || "Failed to sign out.";
       setAuthError(displayError);
-    } finally {
-      if (auth.currentUser || !auth) setIsLoadingAuth(false); 
+      setIsLoadingAuth(false); // Ensure loading state is reset on error
     }
   }, [router]);
 
-  const isAdminLoggedIn = isLoadingAuth ? null : !!user;
+  // The isAdminLoggedIn prop now directly reflects the admin check
+  const isAdminLoggedIn = isLoadingAuth ? null : isAdmin;
 
   return (
     <AuthContext.Provider value={{ 
         user, 
-        isAdminLoggedIn, 
+        isAdminLoggedIn, // This now uses the refined admin check
         signUpWithEmailPassword,
         signInWithEmailPassword, 
-        signInWithGoogle, // Exposed Google Sign-In
+        signInWithGoogle, 
         logoutAdmin, 
         isLoadingAuth,
         authError,
