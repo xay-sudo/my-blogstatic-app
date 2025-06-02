@@ -32,15 +32,19 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             {siteSettings?.siteTitle || 'News Today'}
           </Link>
-          {/* Ad slot removed */}
+
+
+          {/* Ad slot removejjd */}
         </div>
       </header>
 
       {/* Navigation Bar */}
+      
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
             {/* Future nav links can go here */}
+          
           </div>
           <div className="w-full max-w-xs sm:max-w-sm md:max-w-md ml-auto">
             <Suspense fallback={<SearchBarFallback />}>

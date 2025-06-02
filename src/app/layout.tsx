@@ -7,6 +7,7 @@ import { getSettings } from '@/lib/settings-service';
 import type { SiteSettings } from '@/types';
 import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
+import HeadScriptInjector from '@/components/HeadScriptInjector'; // Import the new component
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -35,10 +36,7 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
         {settings.globalHeaderScriptsEnabled && settings.globalHeaderScriptsCustomHtml && (
-          <RenderHtmlContent
-            htmlString={settings.globalHeaderScriptsCustomHtml}
-            // No specific className or placeholderStyle needed for invisible header scripts by default
-          />
+          <HeadScriptInjector htmlString={settings.globalHeaderScriptsCustomHtml} />
         )}
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
@@ -60,4 +58,3 @@ export default async function RootLayout({
     </html>
   );
 }
-
