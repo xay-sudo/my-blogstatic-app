@@ -23,9 +23,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription as ShadcnCardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save, BrainCircuit } from 'lucide-react';
 import { createPostAction } from '@/app/actions';
 import { suggestTags } from '@/ai/flows/suggest-tags';
+import { suggestTitles } from '@/ai/flows/suggest-titles';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
@@ -79,6 +80,10 @@ export default function NewPostPage() {
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [aiTagsError, setAiTagsError] = useState<string | null>(null);
+
+  const [suggestedAiTitles, setSuggestedAiTitles] = useState<string[]>([]);
+  const [isSuggestingTitles, setIsSuggestingTitles] = useState(false);
+  const [aiTitlesError, setAiTitlesError] = useState<string | null>(null);
 
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
@@ -238,6 +243,46 @@ export default function NewPostPage() {
     }
   };
 
+  const handleSuggestTitles = async () => {
+    const content = editorRef.current ? editorRef.current.getContent({format: 'text'}) : form.getValues('content');
+    if (!content || content.trim().length < 50) {
+      setAiTitlesError('Content is too short (less than 50 characters) to suggest titles effectively.');
+      setSuggestedAiTitles([]);
+      toast({
+        variant: "destructive",
+        title: "Content Too Short for Title Suggestion",
+        description: "AI title suggestions require at least 50 characters of content.",
+      });
+      return;
+    }
+    setIsSuggestingTitles(true);
+    setAiTitlesError(null);
+    setSuggestedAiTitles([]);
+    try {
+      const currentTitle = form.getValues('title');
+      const result = await suggestTitles({ blogPostContent: content, currentTitle: currentTitle || undefined });
+      
+      if (result.titles.length > 0) {
+        setSuggestedAiTitles(result.titles);
+        toast({ title: "AI Titles Suggested!", description: "Click a suggestion to use it."});
+      } else {
+         toast({ title: "AI Title Suggestions", description: "No new titles suggested by AI for this content."});
+      }
+    } catch (e) {
+      console.error('Error suggesting titles:', e);
+      setAiTitlesError('Failed to suggest titles. Please try again.');
+      toast({ variant: "destructive", title: "AI Titling Error", description: 'Could not fetch AI title suggestions.' });
+    } finally {
+      setIsSuggestingTitles(false);
+    }
+  };
+
+  const applyAiTitle = (title: string) => {
+    form.setValue('title', title, { shouldValidate: true, shouldDirty: true });
+    setSuggestedAiTitles([]); // Clear suggestions after one is chosen
+  };
+
+
   const handleFetchContentFromUrl = async () => {
     if (!scrapeUrl) {
       toast({ variant: "destructive", title: "Error", description: "Please enter a URL to fetch content from." });
@@ -249,6 +294,9 @@ export default function NewPostPage() {
     setThumbnailPreview(null);
     setSuggestedAiTags([]);
     setAiTagsError(null);
+    setSuggestedAiTitles([]);
+    setAiTitlesError(null);
+
 
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
@@ -346,9 +394,12 @@ export default function NewPostPage() {
       const contentForAiAfterScrape = editorRef.current ? editorRef.current.getContent({ format: 'text' }) : scrapedData.content;
       if (contentForAiAfterScrape && contentForAiAfterScrape.trim().length >= 50) {
         await handleSuggestTags(contentForAiAfterScrape);
+        await handleSuggestTitles(); // Also suggest titles
       } else if (scrapedData.content) {
         setAiTagsError('Scraped content is too short (less than 50 characters) for effective AI tag suggestions.');
         setSuggestedAiTags([]);
+        setAiTitlesError('Scraped content is too short (less than 50 characters) for effective AI title suggestions.');
+        setSuggestedAiTitles([]);
       }
 
     } catch (error: any) {
@@ -435,8 +486,10 @@ export default function NewPostPage() {
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
-        setSuggestedAiTags([]); // Clear UI suggestions
+        setSuggestedAiTags([]); 
         setAiTagsError(null);
+        setSuggestedAiTitles([]);
+        setAiTitlesError(null);
         setScrapeUrl('');
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
         if (thumbnailUploadInput) {
@@ -463,6 +516,8 @@ export default function NewPostPage() {
     }
   };
 
+
+  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isSuggestingTitles;
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg">
@@ -533,15 +588,15 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">Feature Image:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-img-crop" className="font-normal">Crop</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-img-flip" className="font-normal">Flip</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-img-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -550,11 +605,11 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">White Space:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-ws-yes" className="font-normal">Remove</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-ws-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -563,16 +618,16 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">Random Img Order:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-rio-yes" className="font-normal">Yes</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={allSuggestionsDisabled} />
                     <Label htmlFor="scrape-rio-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
               </div>
-              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}>
+              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={allSuggestionsDisabled}>
                  Set Content Rules (placeholder)
               </Button>
             </div>
@@ -589,9 +644,57 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail} />
+                    <Input placeholder="Your Post Title" {...field} disabled={allSuggestionsDisabled} />
                   </FormControl>
                   <FormMessage />
+                   <div className="mt-2 space-y-1">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleSuggestTitles} 
+                      disabled={isSuggestingTitles || allSuggestionsDisabled}
+                      className="text-xs"
+                    >
+                      {isSuggestingTitles ? (
+                        <>
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Titles...
+                        </>
+                      ) : (
+                        <>
+                          <BrainCircuit className="w-3.5 h-3.5 mr-1.5" />
+                          Suggest Titles with AI
+                        </>
+                      )}
+                    </Button>
+                    {aiTitlesError && (
+                      <div className="text-destructive flex items-center text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiTitlesError}
+                      </div>
+                    )}
+                    {suggestedAiTitles.length > 0 && (
+                      <div className="pt-1">
+                        <p className="text-xs font-medium mb-0.5 text-muted-foreground flex items-center">
+                          <BrainCircuit className="w-3 h-3 mr-1 text-primary" />
+                          AI Title Suggestions (click to use):
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {suggestedAiTitles.map((titleSuggestion, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              onClick={() => applyAiTitle(titleSuggestion)}
+                              className="cursor-pointer hover:bg-primary/10 text-xs"
+                              title={`Use title: ${titleSuggestion}`}
+                            >
+                              {titleSuggestion}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </FormItem>
               )}
             />
@@ -602,7 +705,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={allSuggestionsDisabled}/>
                   </FormControl>
                   <ShadcnFormDescription>URL-friendly version of the title (auto-updated).</ShadcnFormDescription>
                   <FormMessage />
@@ -618,7 +721,7 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                  disabled={allSuggestionsDisabled}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -654,7 +757,7 @@ export default function NewPostPage() {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                      disabled={allSuggestionsDisabled}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -688,31 +791,44 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                      disabled={allSuggestionsDisabled}
                     />
                   </FormControl>
                   <ShadcnFormDescription>Comma-separated tags. AI will also attempt to add tags on save.</ShadcnFormDescription>
                   <FormMessage />
-                  {/* Restored UI for AI tag suggestions after scraping */}
                   <div className="mt-3 space-y-2">
-                    {isSuggestingTags && !isSubmittingForm && ( // Show loader only for scrape-time suggestions
-                        <div className="flex items-center text-sm text-muted-foreground">
-                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                            <span>Suggesting tags from scraped content...</span>
-                        </div>
-                    )}
+                     <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleSuggestTags()}
+                      disabled={isSuggestingTags || allSuggestionsDisabled}
+                      className="text-xs"
+                    >
+                      {isSuggestingTags && !isSubmittingForm ? (
+                        <>
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Tags...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          Suggest Tags with AI
+                        </>
+                      )}
+                    </Button>
                     {aiTagsError && (
-                      <div className="text-destructive flex items-center text-sm">
-                        <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
+                      <div className="text-destructive flex items-center text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiTagsError}
                       </div>
                     )}
                     {suggestedAiTags.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium mb-1 text-muted-foreground flex items-center">
-                          <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
-                          AI Suggestions (click to add):
+                      <div className="pt-1">
+                        <p className="text-xs font-medium mb-0.5 text-muted-foreground flex items-center">
+                          <Sparkles className="w-3 h-3 mr-1 text-primary" />
+                          AI Tag Suggestions (click to add):
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1">
                           {suggestedAiTags.map((tag) => (
                             <Badge
                               key={tag}
@@ -727,10 +843,9 @@ export default function NewPostPage() {
                         </div>
                       </div>
                     )}
-                    {/* Message if content is too short for initial suggestions or no suggestions found */}
                     {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length < 50 && (
                         <p className="text-xs text-muted-foreground">
-                          If you import content, AI tag suggestions will appear here if the content is sufficient (50+ characters).
+                          If you import content or write more, AI tag suggestions will appear here (requires 50+ characters).
                         </p>
                     )}
                   </div>
@@ -739,11 +854,11 @@ export default function NewPostPage() {
             />
 
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={allSuggestionsDisabled}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
-                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) ? ( // Show submitting state if form is submitting, even if tags are suggesting during save
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || allSuggestionsDisabled}>
+                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) || (isSuggestingTitles && isSubmittingForm) ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Creating Post...

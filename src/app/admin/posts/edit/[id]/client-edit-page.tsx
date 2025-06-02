@@ -23,10 +23,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Save } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Save, BrainCircuit } from 'lucide-react';
 import { updatePostAction } from '@/app/actions'; 
 import type { Post } from '@/types';
 import { suggestTags } from '@/ai/flows/suggest-tags';
+import { suggestTitles } from '@/ai/flows/suggest-titles';
 import { Badge } from '@/components/ui/badge';
 
 const postFormClientSchema = z.object({
@@ -60,6 +61,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [aiTagsError, setAiTagsError] = useState<string | null>(null);
+
+  const [suggestedAiTitles, setSuggestedAiTitles] = useState<string[]>([]);
+  const [isSuggestingTitles, setIsSuggestingTitles] = useState(false);
+  const [aiTitlesError, setAiTitlesError] = useState<string | null>(null);
 
 
   const form = useForm<PostFormClientValues>({
@@ -157,6 +162,45 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     }
   };
 
+  const handleSuggestTitles = async () => {
+    const content = editorRef.current ? editorRef.current.getContent({format: 'text'}) : form.getValues('content');
+    if (!content || content.trim().length < 50) {
+      setAiTitlesError('Content is too short (less than 50 characters) to suggest titles effectively.');
+      setSuggestedAiTitles([]);
+      toast({
+        variant: "destructive",
+        title: "Content Too Short for Title Suggestion",
+        description: "AI title suggestions require at least 50 characters of content.",
+      });
+      return;
+    }
+    setIsSuggestingTitles(true);
+    setAiTitlesError(null);
+    setSuggestedAiTitles([]);
+    try {
+      const currentTitle = form.getValues('title');
+      const result = await suggestTitles({ blogPostContent: content, currentTitle: currentTitle || undefined });
+      
+      if (result.titles.length > 0) {
+        setSuggestedAiTitles(result.titles);
+        toast({ title: "AI Titles Suggested!", description: "Click a suggestion to use it."});
+      } else {
+         toast({ title: "AI Title Suggestions", description: "No new titles suggested by AI for this content."});
+      }
+    } catch (e) {
+      console.error('Error suggesting titles:', e);
+      setAiTitlesError('Failed to suggest titles. Please try again.');
+      toast({ variant: "destructive", title: "AI Titling Error", description: 'Could not fetch AI title suggestions.' });
+    } finally {
+      setIsSuggestingTitles(false);
+    }
+  };
+
+  const applyAiTitle = (title: string) => {
+    form.setValue('title', title, { shouldValidate: true, shouldDirty: true });
+    setSuggestedAiTitles([]); 
+  };
+
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
@@ -175,15 +219,16 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     let finalTags = data.tags ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0) : [];
     const contentForAi = editorRef.current ? editorRef.current.getContent({format: 'text'}) : data.content;
 
-    if (contentForAi && contentForAi.trim().length >= 50) {
+    // Suggest tags on save only if no manual suggestions were made or if they were cleared
+    if (contentForAi && contentForAi.trim().length >= 50 && suggestedAiTags.length === 0 && !aiTagsError) {
       try {
         toast({title: "Checking for AI Tags...", description: "Please wait while tags are being generated for the content."});
-        const tempIsSuggestingTags = isSuggestingTags; // Store current state
-        if (!isSuggestingTags) setIsSuggestingTags(true); // Set if not already suggesting (manual might be running)
+        const tempIsSuggestingTags = isSuggestingTags; 
+        if (!isSuggestingTags) setIsSuggestingTags(true); 
         
         const aiResult = await suggestTags({ blogPostContent: contentForAi });
         
-        if (!tempIsSuggestingTags) setIsSuggestingTags(false); // Revert if this was an auto-suggestion
+        if (!tempIsSuggestingTags) setIsSuggestingTags(false); 
 
         const newAiTags = aiResult.tags.filter(tag => !finalTags.includes(tag.toLowerCase()));
         if (newAiTags.length > 0) {
@@ -197,7 +242,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
       } catch (e) {
         console.error('Error suggesting tags during save:', e);
         toast({variant: "destructive", title: "AI Tagging Failed on Save", description: "Could not generate AI tags automatically. Post will be saved with manual tags only."});
-        if (!isSuggestingTags) setIsSuggestingTags(false); // Ensure it's reset if save-time suggestion failed
+        if (!isSuggestingTags) setIsSuggestingTags(false); 
       }
     }
     
@@ -235,8 +280,11 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
-        // Don't reset the form automatically, just the file input
-        // Keep AI suggestions if any, as user might want to save again.
+        // Reset AI suggestions for next potential edit session or interaction
+        setSuggestedAiTags([]);
+        setAiTagsError(null);
+        setSuggestedAiTitles([]);
+        setAiTitlesError(null);
       }
     } catch (error: any) {
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
@@ -254,6 +302,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
        }
     }
   };
+  
+  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isSuggestingTitles;
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg">
@@ -279,9 +329,57 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags} />
+                    <Input placeholder="Your Post Title" {...field} disabled={allSuggestionsDisabled} />
                   </FormControl>
                   <FormMessage />
+                  <div className="mt-2 space-y-1">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleSuggestTitles} 
+                      disabled={isSuggestingTitles || allSuggestionsDisabled}
+                      className="text-xs"
+                    >
+                      {isSuggestingTitles ? (
+                        <>
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Titles...
+                        </>
+                      ) : (
+                        <>
+                          <BrainCircuit className="w-3.5 h-3.5 mr-1.5" />
+                          Suggest Titles with AI
+                        </>
+                      )}
+                    </Button>
+                    {aiTitlesError && (
+                      <div className="text-destructive flex items-center text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiTitlesError}
+                      </div>
+                    )}
+                    {suggestedAiTitles.length > 0 && (
+                      <div className="pt-1">
+                        <p className="text-xs font-medium mb-0.5 text-muted-foreground flex items-center">
+                          <BrainCircuit className="w-3 h-3 mr-1 text-primary" />
+                          AI Title Suggestions (click to use):
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {suggestedAiTitles.map((titleSuggestion, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              onClick={() => applyAiTitle(titleSuggestion)}
+                              className="cursor-pointer hover:bg-primary/10 text-xs"
+                              title={`Use title: ${titleSuggestion}`}
+                            >
+                              {titleSuggestion}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </FormItem>
               )}
             />
@@ -292,7 +390,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={allSuggestionsDisabled}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title.</FormDescription>
                   <FormMessage />
@@ -308,7 +406,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags}
+                  disabled={allSuggestionsDisabled}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -337,7 +435,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                         field.onChange(content); 
                         form.trigger('content'); 
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={allSuggestionsDisabled}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -371,7 +469,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={allSuggestionsDisabled}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. AI will also attempt to add relevant tags on save.</FormDescription>
@@ -382,33 +480,33 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                       variant="outline" 
                       size="sm"
                       onClick={handleManualSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm}
-                      className="text-sm"
+                      disabled={isSuggestingTags || allSuggestionsDisabled}
+                      className="text-xs"
                     >
                       {isSuggestingTags && !isSubmittingForm ? (
                         <>
-                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                          Suggesting...
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Tags...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4 mr-2" />
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                           Suggest Tags with AI
                         </>
                       )}
                     </Button>
                     {aiTagsError && (
-                      <div className="text-destructive flex items-center text-sm">
-                        <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
+                      <div className="text-destructive flex items-center text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiTagsError}
                       </div>
                     )}
                     {suggestedAiTags.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium mb-1 text-muted-foreground flex items-center">
-                          <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
-                          AI Suggestions (click to add):
+                      <div className="pt-1">
+                        <p className="text-xs font-medium mb-0.5 text-muted-foreground flex items-center">
+                          <Sparkles className="w-3 h-3 mr-1 text-primary" />
+                          AI Tag Suggestions (click to add):
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1">
                           {suggestedAiTags.map((tag) => (
                             <Badge
                               key={tag}
@@ -434,11 +532,11 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={allSuggestionsDisabled}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}>
-                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) ? (
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || allSuggestionsDisabled}>
+                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) || (isSuggestingTitles && isSubmittingForm) ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Saving Changes...
@@ -457,4 +555,3 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     </Card>
   );
 }
-
