@@ -45,8 +45,8 @@ export default function Header() {
       <header className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
           {/* Logo */}
-          <Link href="/" className="text-5xl font-headline font-bold text-red-600 hover:text-red-700 transition-colors">
-            londonpost
+          <Link href="/" className="text-5xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
+            News Today
           </Link>
 
           {/* Ad Container in Header */}
@@ -60,9 +60,6 @@ export default function Header() {
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">
-              SAMPLE PAGE
-            </Link>
             {/* Admin Link - Conditionally Rendered */}
             {!isLoadingAuth && isAdminLoggedIn && (
               <Link href="/admin" className="flex items-center text-sm hover:text-primary transition-colors">
@@ -79,3 +76,4 @@ export default function Header() {
     </>
   );
 }
+
