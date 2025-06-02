@@ -100,10 +100,10 @@ export default function NewPostPage() {
       
       if (file.size > MAX_THUMBNAIL_SIZE_BYTES) {
         toast({
-          variant: "default", // Use default or a specific warning variant if you have one
+          variant: "default", 
           title: "Large File Selected",
-          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it.`,
-          duration: 5000, // Show for 5 seconds
+          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it first or proceed with caution.`,
+          duration: 7000, 
         });
       }
       
@@ -132,6 +132,9 @@ export default function NewPostPage() {
         setThumbnailPreview(null); 
         setThumbnailFile(null); 
         form.setValue('thumbnailUrl', '', { shouldValidate: true }); 
+        if (e.target) { // Reset file input value
+            e.target.value = '';
+        }
       } finally {
         setIsUploadingThumbnail(false);
       }
@@ -139,12 +142,16 @@ export default function NewPostPage() {
       setThumbnailFile(null);
       setThumbnailPreview(null);
       form.setValue('thumbnailUrl', '', { shouldValidate: true });
+       if (e.target) { // Also reset if no file is selected (e.g. dialog cancelled)
+            e.target.value = '';
+       }
     }
   };
 
   const uploadFile = async (file: File, path: string, progressKey: string): Promise<string> => {
     if (!storage) {
-      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured." });
+      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured. Check console." });
+      console.error("Firebase Storage is not configured. Ensure NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET and other Firebase config variables are set.");
       throw new Error("Firebase Storage not configured.");
     }
     if (!user) {
@@ -166,7 +173,19 @@ export default function NewPostPage() {
         },
         (error) => {
           console.error(`Upload error for ${progressKey}:`, error);
-          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: error.message });
+          let errorMessage = "An unknown error occurred during upload.";
+          switch (error.code) {
+            case 'storage/unauthorized':
+              errorMessage = "Permission denied. Check Firebase Storage rules.";
+              break;
+            case 'storage/canceled':
+              errorMessage = "Upload canceled.";
+              break;
+            case 'storage/unknown':
+              errorMessage = "An unknown error occurred, possibly network-related.";
+              break;
+          }
+          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: errorMessage });
           setUploadProgress(prev => ({ ...prev, [progressKey]: 0 }));
           reject(error);
         },
@@ -186,7 +205,7 @@ export default function NewPostPage() {
   };
 
   const handleSuggestTags = async () => {
-    const content = form.getValues('content');
+    const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
     if (!content || content.trim().length < 50) {
       setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
       setSuggestedAiTags([]);
@@ -221,7 +240,7 @@ export default function NewPostPage() {
     const tagToAddLower = tagToAdd.toLowerCase();
     if (!currentTagsArray.includes(tagToAddLower)) {
       const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
-      form.setValue('tags', newTagsString, { shouldValidate: true });
+      form.setValue('tags', newTagsString, { shouldValidate: true, shouldDirty: true });
       setSuggestedAiTags(prev => prev.filter(t => t.toLowerCase() !== tagToAddLower));
     } else {
       toast({
@@ -235,15 +254,22 @@ export default function NewPostPage() {
     setIsSubmittingForm(true);
         
     const validationResult = await form.trigger();
-    if (!validationResult || (thumbnailFile && !form.getValues('thumbnailUrl'))) {
-        let description = "Please check the form for errors.";
-        if (thumbnailFile && !form.getValues('thumbnailUrl')) {
-            description = "Thumbnail was selected but failed to upload. Please re-select or try again.";
-        }
+    // Check if a thumbnail was selected but its URL is not in the form (i.e. upload failed or was incomplete)
+    if (thumbnailFile && !form.getValues('thumbnailUrl')) {
+        toast({
+            variant: "destructive",
+            title: "Thumbnail Upload Incomplete",
+            description: "A thumbnail image was selected, but its upload did not complete successfully. Please re-select the image or remove it before submitting.",
+        });
+        setIsSubmittingForm(false);
+        return;
+    }
+    
+    if (!validationResult) {
         toast({
             variant: "destructive",
             title: "Validation Error",
-            description: description,
+            description: "Please check the form for errors.",
         });
         setIsSubmittingForm(false);
         return;
@@ -290,6 +316,9 @@ export default function NewPostPage() {
         setUploadProgress({});
         setSuggestedAiTags([]);
         setAiTagsError(null);
+        if (document.getElementById('thumbnail-upload') as HTMLInputElement) {
+          (document.getElementById('thumbnail-upload') as HTMLInputElement).value = '';
+        }
         router.push('/admin/posts'); 
       }
     } catch (error) {
@@ -436,12 +465,11 @@ export default function NewPostPage() {
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
                   <FormMessage />
-                  {/* AI Tag Suggestions Section - Integrated */}
                   <div className="mt-3 space-y-2">
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail}
+                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail || !form.getValues('content') || form.getValues('content').length < 50}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -484,7 +512,7 @@ export default function NewPostPage() {
                     )}
                     {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
                         <p className="text-xs text-muted-foreground">
-                          Write some content and click the button above to get tag suggestions.
+                          Write some content (at least 50 characters) and click the button above to get tag suggestions.
                         </p>
                       )}
                   </div>
@@ -511,5 +539,6 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
 
     

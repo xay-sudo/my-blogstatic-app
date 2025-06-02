@@ -91,8 +91,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         toast({
           variant: "default",
           title: "Large File Selected",
-          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it.`,
-          duration: 5000,
+          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it first or proceed with caution.`,
+          duration: 7000,
         });
       }
       
@@ -116,28 +116,30 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         toast({ title: "Thumbnail Uploaded", description: "New thumbnail ready." });
       } catch (error) {
         toast({ variant: "destructive", title: "Thumbnail Auto-Upload Failed", description: "Please try selecting the file again or check console." });
-        setThumbnailPreview(initialPostData.thumbnailUrl || null); // Revert to old preview if upload fails
+        setThumbnailPreview(initialPostData.thumbnailUrl || null); 
         setThumbnailFile(null);
         form.setValue('thumbnailUrl', initialPostData.thumbnailUrl || '', { shouldValidate: true });
+        if (e.target) { // Reset file input value
+            e.target.value = '';
+        }
       } finally {
         setIsUploadingThumbnail(false);
       }
     } else {
-      // If no file is selected, keep the existing thumbnail URL unless explicitly cleared elsewhere.
-      // This logic assumes user might cancel file selection and wants to keep current thumbnail.
-      if (!form.getValues('thumbnailUrl') && initialPostData.thumbnailUrl) {
-         form.setValue('thumbnailUrl', initialPostData.thumbnailUrl, { shouldValidate: true });
-         setThumbnailPreview(initialPostData.thumbnailUrl);
-      } else if (!form.getValues('thumbnailUrl')) { // If both form value and initial are empty
-         setThumbnailPreview(null);
-      }
+      // If no file is selected, revert to the original thumbnail if it exists.
       setThumbnailFile(null);
+      setThumbnailPreview(initialPostData.thumbnailUrl || null);
+      form.setValue('thumbnailUrl', initialPostData.thumbnailUrl || '', { shouldValidate: true });
+       if (e.target) { // Also reset if no file is selected (e.g. dialog cancelled)
+            e.target.value = '';
+       }
     }
   };
 
   const uploadFile = async (file: File, path: string, progressKey: string): Promise<string> => {
     if (!storage) {
-      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured." });
+      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured. Check console." });
+      console.error("Firebase Storage is not configured. Ensure NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET and other Firebase config variables are set.");
       throw new Error("Firebase Storage not configured.");
     }
     if (!user) {
@@ -159,7 +161,19 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         },
         (error) => {
           console.error(`Upload error for ${progressKey}:`, error);
-          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: error.message });
+           let errorMessage = "An unknown error occurred during upload.";
+          switch (error.code) {
+            case 'storage/unauthorized':
+              errorMessage = "Permission denied. Check Firebase Storage rules.";
+              break;
+            case 'storage/canceled':
+              errorMessage = "Upload canceled.";
+              break;
+            case 'storage/unknown':
+              errorMessage = "An unknown error occurred, possibly network-related.";
+              break;
+          }
+          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: errorMessage });
           setUploadProgress(prev => ({ ...prev, [progressKey]: 0 }));
           reject(error);
         },
@@ -227,6 +241,21 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
         
+    // Check if a new thumbnail was selected for upload but the upload didn't complete/failed.
+    // thumbnailFile would be set if a file was selected, and thumbnailUrl would not have the new URL.
+    if (thumbnailFile && form.getValues('thumbnailUrl') !== initialPostData.thumbnailUrl && !form.getValues('thumbnailUrl')) {
+      // This condition means: a file is staged (thumbnailFile is not null),
+      // AND the current thumbnailUrl in the form is not the original one (so a change was intended),
+      // AND the current thumbnailUrl in the form is empty (meaning new upload failed to populate it).
+      toast({
+          variant: "destructive",
+          title: "Thumbnail Upload Incomplete",
+          description: "A new thumbnail image was selected, but its upload did not complete successfully. Please re-select the image or ensure the existing thumbnail is intended.",
+      });
+      setIsSubmittingForm(false);
+      return;
+    }
+
     const validationResult = await form.trigger();
     if (!validationResult) {
         toast({
@@ -272,6 +301,9 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
           title: 'Post Updated Successfully',
           description: `"${postPayload.title}" has been updated.`,
         });
+         if (document.getElementById('thumbnail-upload') as HTMLInputElement) {
+          (document.getElementById('thumbnail-upload') as HTMLInputElement).value = '';
+        }
         router.push('/admin/posts'); 
       }
     } catch (error) {
@@ -421,7 +453,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail}
+                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail || !form.getValues('content') || form.getValues('content').length < 50}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -462,7 +494,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     )}
                     {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
                         <p className="text-xs text-muted-foreground">
-                          Write some content and click the button above to get tag suggestions.
+                          Write some content (at least 50 characters) and click the button above to get tag suggestions.
                         </p>
                       )}
                   </div>
@@ -494,4 +526,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     </Card>
   );
 }
+    
+
     
