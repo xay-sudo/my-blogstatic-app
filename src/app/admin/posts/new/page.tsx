@@ -29,8 +29,8 @@ import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert'; // Added Alert import
-import { Label } from '@/components/ui/label'; // Import Label component
+import { Alert, AlertDescription } from '@/components/ui/alert'; 
+import { Label } from '@/components/ui/label'; 
 
 
 // Client-side schema for immediate validation of text fields
@@ -196,15 +196,11 @@ export default function NewPostPage() {
     //   // if (scrapedData.slug) form.setValue('slug', scrapedData.slug);
     //   // else if (scrapedData.title) { /* auto-generate slug from title if no slug provided */ }
     //   
-    //   // // Handling thumbnail is more complex:
-    //   // // You might get a URL. You could display it and let user confirm,
-    //   // // or try to download it client-side (hard) or server-side via another function,
-    //   // // then set it to thumbnailFile and thumbnailPreview.
     //   // if (scrapedData.thumbnailUrl) {
-    //   //    console.log("Scraped thumbnail URL:", scrapedData.thumbnailUrl);
-    //   //    setThumbnailPreview(scrapedData.thumbnailUrl); // This only sets preview if it's a direct image URL
-    //   //    // To actually use it as the uploaded file, you'd need to fetch it as a blob
+    //   //    setThumbnailPreview(scrapedData.thumbnailUrl); 
+    //   //    // To actually use it as the uploaded file for local storage, you'd need to fetch it as a blob,
     //   //    // then create a File object and setThumbnailFile. This is an advanced step.
+    //   //    // For Firebase Storage, you might just store this URL.
     //   //    toast({ title: "Thumbnail Info", description: "A thumbnail URL was found. Review and select manually if needed."});
     //   // }
     //   
@@ -220,12 +216,19 @@ export default function NewPostPage() {
   
     // Simulated delay and response for UI demonstration:
     toast({ title: "Fetching Content (Simulated)", description: "This is a simulation. Implement your Cloud Function call." });
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
+    let host;
+    try {
+      host = new URL(scrapeUrl).hostname;
+    } catch (e) {
+      host = "source";
+    }
+
     const simulatedScrapedData = {
-      title: `Fetched: My Awesome Post from ${scrapeUrl.substring(0, Math.min(30, scrapeUrl.length))}${scrapeUrl.length > 30 ? '...' : ''}`,
-      content: `<p>This is some <strong>simulated scraped content</strong> from the URL you provided. It demonstrates how the form fields could be populated.</p><p>Your actual Cloud Function would parse the real website's HTML to extract meaningful title, article body, and potentially images.</p><ul><li>List Item 1</li><li>Another List Item</li></ul><p>Remember to replace this simulation with a real call to your Firebase Cloud Function.</p>`,
-      // slug: `fetched-post-${Date.now().toString().slice(-5)}` // Slug generation would be better handled based on title
+      title: `Simulated Title from ${host}`,
+      content: `<p>This is <strong>simulated content</strong> scraped from the URL: ${scrapeUrl}.</p><p>It includes some basic HTML structure like paragraphs, lists, and maybe an image if your actual scraper finds one.</p><h2>A Subheading</h2><p>More details would appear here, parsed from the article body of the source page.</p><ul><li>List item 1</li><li>List item 2</li></ul><p><em>Remember to replace this simulation with a real call to your Firebase Cloud Function that performs the actual scraping.</em></p>`,
+      thumbnailUrl: `https://placehold.co/600x400.png?text=Scraped+Image+from+${host}`, // Simulate a found thumbnail
     };
   
     form.setValue('title', simulatedScrapedData.title, { shouldValidate: true, shouldDirty: true });
@@ -235,12 +238,15 @@ export default function NewPostPage() {
       editorRef.current.setContent(simulatedScrapedData.content);
     }
     
-    // For thumbnail, you would ideally get an image URL from scraper,
-    // then potentially fetch that image and set it to thumbnailFile & thumbnailPreview.
-    // For simulation, let's set a placeholder preview if one isn't already there.
-    if (!thumbnailPreview) {
-        setThumbnailPreview('https://placehold.co/600x400.png?text=Scraped+Preview');
-        // Note: This doesn't set thumbnailFile, so it won't be uploaded unless user selects one.
+    // Simulate setting the thumbnail preview from the scraped data
+    if (simulatedScrapedData.thumbnailUrl) {
+        setThumbnailPreview(simulatedScrapedData.thumbnailUrl);
+        // Note: This only sets the preview. For the image to be saved with the post,
+        // your actual implementation would need to:
+        // 1. If storing locally: Fetch this scraped thumbnailUrl as a Blob, create a File object, and set `thumbnailFile`.
+        // 2. Or, if your backend Cloud Function already uploaded it to Firebase/local storage and returned a usable path/URL,
+        //    you might store that path directly.
+        // For now, user still needs to manually select a file if they want this previewed image to be uploaded.
     }
 
     toast({ title: "Content Populated (Simulated)", description: "Form fields have been filled with simulated data. Please review and adjust as needed." });
@@ -271,6 +277,10 @@ export default function NewPostPage() {
     if (thumbnailFile) {
       formData.append('thumbnailFile', thumbnailFile);
     }
+    // If thumbnailPreview is set from scraping but thumbnailFile is null,
+    // the server action needs to be aware that it might need to fetch the previewed URL
+    // or the user has to manually select a file. Current action expects `thumbnailFile`.
+
 
     try {
       const result = await createPostAction(formData); 
@@ -301,6 +311,9 @@ export default function NewPostPage() {
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
+        }
+        if (editorRef.current) {
+          editorRef.current.setContent('<p>Write your blog post content here...</p>');
         }
         router.push('/admin/posts'); 
       }
@@ -480,7 +493,7 @@ export default function NewPostPage() {
                 </div>
               )}
               <FormDescription>
-                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB).
+                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB). If importing from URL, you may need to save and re-upload the suggested image if you wish to use it.
               </FormDescription>
             </FormItem>
 
