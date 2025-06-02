@@ -43,8 +43,8 @@ export default async function RootLayout({
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col bg-background text-foreground">
         <ThemeProvider storageKey="newstoday-theme" defaultTheme="light">
+          <BannerAd settings={settings} /> {/* Banner Ad moved to the top */}
           <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
-          <BannerAd settings={settings} /> {/* Banner Ad placed here */}
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}
           </main>
