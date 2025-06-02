@@ -39,11 +39,15 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!isValidHttpUrl(supabaseUrl)) {
-    throw new Error(`CRITICAL: NEXT_PUBLIC_SUPABASE_URL is invalid for admin client. Value: "${supabaseUrl}". Please check environment variables.`);
+  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !supabaseUrl.startsWith('http')) {
+    throw new Error(
+      `CRITICAL: NEXT_PUBLIC_SUPABASE_URL is not defined, is a placeholder, or is invalid for admin client. Please check environment variables. Current value: "${supabaseUrl}"`
+    );
   }
-  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
-    throw new Error(`CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured or invalid for admin actions. Please check environment variables.`);
+  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.trim() === '' || supabaseServiceRoleKey === 'your_supabase_service_role_key_here' || supabaseServiceRoleKey.length < 50) {
+    throw new Error(
+      `CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not defined, is a placeholder, or is invalid for admin actions. Please check environment variables.`
+    );
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
@@ -64,7 +68,7 @@ async function seedInitialSettingsFromJson() {
       .eq('id', 1)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { 
+    if (fetchError && fetchError.code !== 'PGRST116') {
       console.warn('Could not check site_settings in DB for seeding:', JSON.stringify(fetchError, null, 2));
       initialSettingsDataLoaded = true;
       return;
@@ -113,29 +117,34 @@ export async function getSettings(): Promise<SiteSettings> {
     .eq('id', 1)
     .single();
 
-  if (error) { // Check if error object exists and is not null/undefined
-    // Log detailed error information
-    const errorDetails = {
-      message: (error as any).message,
-      code: (error as any).code,
-      details: (error as any).details,
-      hint: (error as any).hint,
-      fullErrorObject: JSON.stringify(error, null, 2)
-    };
-    console.error('Error fetching settings from Supabase:', errorDetails);
+  if (error) {
+    const errorIsLikelyEmpty = !(error as any).message && !(error as any).code && JSON.stringify(error) === '{}';
 
-    // If it's specifically 'PGRST116' (row not found), it's not a "critical" error for this function's purpose,
-    // as it means the settings row just doesn't exist yet, and we should return defaults.
-    // For any other error code, OR if error.code is missing (like when error is {}),
-    // it's a more problematic issue, so we log it and return defaults.
-    if ((error as any).code !== 'PGRST116') {
+    if (errorIsLikelyEmpty) {
+      console.error(
+        'Error fetching settings from Supabase: Received an empty error object. ' +
+        'This often indicates a problem with Supabase client initialization (check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables) ' +
+        'or a network connectivity issue to Supabase. Raw error object:', error
+      );
+    } else {
+      const errorDetails = {
+        message: (error as any).message,
+        code: (error as any).code,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        fullErrorObject: JSON.stringify(error, null, 2)
+      };
+      console.error('Error fetching settings from Supabase:', errorDetails); // This is line 125
+    }
+
+    if ((error as any).code !== 'PGRST116') { // PGRST116 means no rows found, which is acceptable for initial state.
         return { ...DEFAULT_SETTINGS_OBJ };
     }
-    // If error.code IS 'PGRST116', it means no settings row. We'll proceed to the !data check below,
-    // which will also lead to returning default settings.
   }
 
+
   if (!data || !data.settings) {
+    // This case handles when PGRST116 occurred (no settings row found) or if data/settings is null for other reasons
     return { ...DEFAULT_SETTINGS_OBJ };
   }
 
