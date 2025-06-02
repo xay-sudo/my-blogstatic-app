@@ -37,7 +37,7 @@ export default function PostCard({ post }: PostCardProps) {
       )}
       <CardHeader>
         <Link href={`/posts/${post.slug}`}>
-          <CardTitle className="font-headline text-2xl hover:text-primary transition-colors">
+          <CardTitle className="font-headline text-xl hover:text-primary transition-colors">
             {post.title}
           </CardTitle>
         </Link>

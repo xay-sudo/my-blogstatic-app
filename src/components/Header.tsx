@@ -102,7 +102,7 @@ export default function Header({ siteSettings }: HeaderProps) {
       {/* Main Header with Logo and Ad space */}
       <header className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-          <Link href="/" className="text-5xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
+          <Link href="/" className="text-4xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             News Today
           </Link>
           <div className="mt-4 sm:mt-0 sm:ml-auto" aria-label="Advertisement Area">

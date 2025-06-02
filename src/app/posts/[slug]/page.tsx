@@ -70,7 +70,7 @@ export default async function PostPage({ params }: PostPageProps) {
     <>
       <article className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 bg-card shadow-xl rounded-lg">
         <header className="mb-8">
-          <h1 className="font-headline text-4xl md:text-5xl font-bold text-primary mb-4 break-words">
+          <h1 className="font-headline text-3xl md:text-4xl font-bold text-primary mb-4 break-words">
             {post.title}
           </h1>
           <div className="text-muted-foreground flex items-center space-x-4 text-sm">
