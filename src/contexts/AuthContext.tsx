@@ -40,6 +40,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    if (!auth) {
+      console.error(
+        "AuthContext: Firebase auth object is not available. " +
+        "This usually indicates a problem with Firebase initialization, " +
+        "possibly due to missing environment variables. " +
+        "Please check your Vercel/deployment environment variables and " +
+        "the browser console for more specific Firebase initialization errors from 'firebase-config.ts'."
+      );
+      setIsLoadingAuth(false);
+      setUser(null);
+      setAuthError("Firebase initialization failed. Critical environment variables might be missing in your deployment settings.");
+      return; // Don't try to subscribe if auth object isn't there
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsLoadingAuth(false);
@@ -50,9 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, []);
+  }, []); // `auth` is not a reactive dependency here; its availability is determined at module load.
 
   const signUpWithEmailPassword = useCallback(async ({ email, password }: AuthFormValues) => {
+    if (!auth) {
+      const errMessage = "Sign-up failed: Firebase is not initialized. Check deployment configuration.";
+      setAuthError(errMessage);
+      throw new Error(errMessage);
+    }
     if (!password) {
       setAuthError("Password is required for sign up.");
       throw new Error("Password is required for sign up.");
@@ -62,7 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged will handle setting the user
-      // router.push('/admin'); // Let the login page handle redirection on success
     } catch (error: any) {
       console.error("Error signing up:", error);
       setAuthError(error.message || "Failed to sign up.");
@@ -73,6 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithEmailPassword = useCallback(async ({ email, password }: AuthFormValues) => {
+    if (!auth) {
+      const errMessage = "Sign-in failed: Firebase is not initialized. Check deployment configuration.";
+      setAuthError(errMessage);
+      throw new Error(errMessage);
+    }
     if (!password) {
       setAuthError("Password is required for sign in.");
       throw new Error("Password is required for sign in.");
@@ -82,7 +105,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged will handle setting the user
-      // router.push('/admin'); // Let the login page handle redirection on success
     } catch (error: any) {
       console.error("Error signing in:", error);
       setAuthError(error.message || "Failed to sign in.");
@@ -93,19 +115,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logoutAdmin = useCallback(async () => {
+    if (!auth) {
+      const errMessage = "Logout failed: Firebase is not initialized. Check deployment configuration.";
+      setAuthError(errMessage);
+      console.error(errMessage);
+      return;
+    }
     setIsLoadingAuth(true);
     setAuthError(null);
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will handle setting user to null
-      router.push('/'); // Redirect to homepage after logout
+      router.push('/'); 
     } catch (error: any) {
       console.error("Error signing out:", error);
       setAuthError(error.message || "Failed to sign out.");
     } finally {
-      // setIsLoadingAuth(false) will be handled by onAuthStateChanged if user becomes null
-      // or explicitly set if sign out fails for some reason before auth state changes
-      if (auth.currentUser) setIsLoadingAuth(false);
+      // setIsLoadingAuth(false) will be handled by onAuthStateChanged
+      // or if auth.currentUser remains, set it explicitly.
+      if (auth.currentUser) setIsLoadingAuth(false); 
     }
   }, [router]);
 
