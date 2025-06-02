@@ -82,12 +82,9 @@ ensurePostsFileExists([
     slug: 'getting-started-with-nextjs',
     title: 'Getting Started with Next.js 14',
     date: '2024-05-01T10:00:00Z',
-    excerpt: 'A beginner-friendly guide to setting up your first Next.js 14 application with App Router.',
     content: "\n      <p class=\"mb-4\">Next.js is a popular React framework for building server-rendered applications, static websites, and more. Version 14 introduces several exciting features and improvements, particularly around the App Router.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Installation</h2>\n      <p class=\"mb-4\">To create a new Next.js app, you can use the following command:</p>\n      <pre class=\"bg-muted p-4 rounded-md overflow-x-auto mb-4\"><code class=\"font-code\">npx create-next-app@latest</code></pre>\n      <p class=\"mb-4\">Follow the prompts to configure your project. We recommend choosing TypeScript and Tailwind CSS for a modern development experience.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">App Router</h2>\n      <p class=\"mb-4\">The App Router, introduced in Next.js 13 and refined in 14, provides a new way to structure your application using file-system routing within the <code class=\"font-code bg-muted px-1 rounded\">app</code> directory. It supports layouts, nested routes, loading UI, error handling, and more, out of the box.</p>\n      <p class=\"mb-4\">Key concepts include Server Components, Client Components, and Route Handlers for API endpoints.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Conclusion</h2>\n      <p>Next.js 14 continues to push the boundaries of web development, offering powerful tools and a great developer experience. Dive in and start building!</p>\n    ",
     tags: ['Next.js', 'JavaScript', 'Web Development', 'React'],
     imageUrl: 'https://placehold.co/800x600.png',
     thumbnailUrl: 'https://placehold.co/400x300.png'
   }
 ]).catch(console.error);
-
-    

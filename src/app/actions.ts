@@ -11,9 +11,8 @@ import * as z from 'zod';
 const postFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100),
   slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  excerpt: z.string().min(10).max(300),
   content: z.string().min(50),
-  tags: z.array(z.string()).optional().default([]), // Ensure tags is an array
+  tags: z.array(z.string()).optional().default([]), 
   imageUrl: z.string().url().optional().or(z.literal('')),
   thumbnailUrl: z.string().url().optional().or(z.literal('')),
 });
@@ -48,12 +47,7 @@ export async function createPostAction(data: PostFormActionValues) {
 
   revalidatePath('/');
   revalidatePath('/admin/posts');
-  // Optionally revalidate specific post paths if slugs are predictable or many posts change
-  // revalidatePath(`/posts/${validation.data.slug}`); // This might be too broad or unnecessary for create
-
-  redirect('/admin/posts'); // Redirect after successful creation
-  // Note: redirect needs to be called outside try/catch or be the last thing if no return object is needed on success
-  // Since redirect throws an error to stop execution and navigate, we don't explicitly return success:true here if redirecting.
+  redirect('/admin/posts'); 
 }
 
 export async function deletePostAction(postId: string) {
@@ -61,7 +55,6 @@ export async function deletePostAction(postId: string) {
     await postService.deletePostById(postId);
     revalidatePath('/');
     revalidatePath('/admin/posts');
-    // Consider revalidating relevant tag pages or category pages if they exist
     return { success: true, message: 'Post deleted successfully.' };
   } catch (error) {
     console.error('Failed to delete post:', error);
@@ -71,5 +64,3 @@ export async function deletePostAction(postId: string) {
     };
   }
 }
-
-    

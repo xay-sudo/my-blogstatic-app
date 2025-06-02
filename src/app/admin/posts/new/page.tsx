@@ -20,27 +20,24 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon } from 'lucide-react'; // Use Lucide Loader
+import { ArrowLeft, Loader2 as Loader2Icon } from 'lucide-react'; 
 import { storage } from '@/lib/firebase-config'; 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { createPostAction } from '@/app/actions'; // Import the server action
+import { createPostAction } from '@/app/actions'; 
 import type { Post } from '@/types';
 
 
-// Schema for client-side validation, should match server action's schema basis
 const postFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
-  excerpt: z.string().min(10, { message: 'Excerpt must be at least 10 characters long.' }).max(300, { message: 'Excerpt must be 300 characters or less.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
-  tags: z.string() // Input will be a string
+  tags: z.string() 
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
   imageUrl: z.string().url({ message: 'Please enter a valid URL or upload an image.' }).optional().or(z.literal('')),
@@ -53,7 +50,7 @@ type PostFormClientValues = z.infer<typeof postFormSchema>;
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { user } = useAuth(); // For Firebase Storage user context
+  const { user } = useAuth(); 
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
@@ -62,7 +59,7 @@ export default function NewPostPage() {
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
-  const [isSubmittingForm, setIsSubmittingForm] = useState(false); // Renamed for clarity
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false); 
 
 
   const form = useForm<PostFormClientValues>({
@@ -70,9 +67,8 @@ export default function NewPostPage() {
     defaultValues: {
       title: '',
       slug: '',
-      excerpt: '',
       content: '<p>Write your blog post content here...</p>',
-      tags: '', // Initialize as empty string for input
+      tags: '', 
       imageUrl: '',
       thumbnailUrl: '',
     },
@@ -86,9 +82,9 @@ export default function NewPostPage() {
       const newSlug = watchedTitle
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, '-') // Replace spaces with hyphens
-        .replace(/[^\w-]+/g, '') // Remove non-alphanumeric characters except hyphens
-        .replace(/--+/g, '-'); // Replace multiple hyphens with a single one
+        .replace(/\s+/g, '-') 
+        .replace(/[^\w-]+/g, '') 
+        .replace(/--+/g, '-'); 
       form.setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
     }
   }, [watchedTitle, form]);
@@ -178,10 +174,10 @@ export default function NewPostPage() {
     } catch (error) {
       setIsSubmittingForm(false);
       setUploadProgress({});
-      return; // Error toast handled in uploadFile
+      return; 
     }
     
-    const validationResult = await form.trigger(); // Re-trigger validation for potentially updated URL fields
+    const validationResult = await form.trigger(); 
     if (!validationResult) {
         toast({
             variant: "destructive",
@@ -192,10 +188,8 @@ export default function NewPostPage() {
         return;
     }
     
-    // Get latest values after potential uploads
     const dataForAction = form.getValues();
 
-    // Ensure tags are an array of strings for the server action
     const processedTags = typeof dataForAction.tags === 'string'
         ? dataForAction.tags.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0)
         : (Array.isArray(dataForAction.tags) ? dataForAction.tags : []);
@@ -204,7 +198,6 @@ export default function NewPostPage() {
     const postPayload: Omit<Post, 'id' | 'date'> = {
       title: dataForAction.title,
       slug: dataForAction.slug,
-      excerpt: dataForAction.excerpt,
       content: dataForAction.content,
       tags: processedTags,
       imageUrl: dataForAction.imageUrl,
@@ -220,7 +213,6 @@ export default function NewPostPage() {
           description: result.message || 'An unknown error occurred.',
         });
         if (result.errors) {
-          // Set form errors if provided by server action
           Object.entries(result.errors).forEach(([fieldName, errors]) => {
              if (Array.isArray(errors) && errors.length > 0) {
                 form.setError(fieldName as keyof PostFormClientValues, { type: 'server', message: errors.join(', ') });
@@ -228,16 +220,10 @@ export default function NewPostPage() {
           });
         }
       } else {
-        // If createPostAction redirects, this part might not be reached.
-        // If it returns an object or nothing on success (and doesn't redirect itself), handle success UI here.
         toast({
           title: 'Post Created Successfully',
           description: `"${postPayload.title}" has been created.`,
         });
-        // Reset form and navigate, assuming redirect is not handled by server action
-        // or if you want explicit client-side navigation control after a non-redirecting server action.
-        // router.push('/admin/posts'); // Server action handles redirect
-        // form.reset(); // Server action redirect implies a new page load, form reset might not be strictly needed.
       }
     } catch (error) {
       console.error("Error submitting post:", error);
@@ -249,11 +235,6 @@ export default function NewPostPage() {
     } finally {
       setIsSubmittingForm(false);
       setUploadProgress({});
-      // Only reset files and previews if not redirecting or upon specific success without redirect
-      // setThumbnailFile(null);
-      // setThumbnailPreview(null);
-      // setMainImageFile(null);
-      // setMainImagePreview(null);
     }
   };
 
@@ -302,19 +283,7 @@ export default function NewPostPage() {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="excerpt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Excerpt</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="A short summary of your post..." {...field} rows={3} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            
             <FormField
               control={form.control}
               name="content"
@@ -327,8 +296,8 @@ export default function NewPostPage() {
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
-                        field.onChange(content); // Update RHF field
-                        form.trigger('content'); // Manually trigger validation for content
+                        field.onChange(content); 
+                        form.trigger('content'); 
                       }}
                       init={{
                         height: 500,
@@ -364,7 +333,6 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      // Field value is already handled by RHF with transform
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>

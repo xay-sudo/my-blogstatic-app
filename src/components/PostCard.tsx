@@ -27,9 +27,9 @@ export default function PostCard({ post }: PostCardProps) {
             <Image
               src={displayImageUrl}
               alt={post.title}
-              fill // Use fill for responsive images
-              style={{objectFit:"cover"}} // Use objectFit: "cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Example sizes, adjust as needed
+              fill 
+              style={{objectFit:"cover"}} 
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
               data-ai-hint="article content"
             />
           </div>
@@ -47,9 +47,9 @@ export default function PostCard({ post }: PostCardProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        <p className="text-muted-foreground leading-relaxed">{post.excerpt}</p>
+        {/* Excerpt removed */}
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-4">
+      <CardFooter className="flex flex-col items-start gap-4 pt-4"> {/* Added pt-4 for spacing */}
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {post.tags.map((tag) => (
@@ -64,5 +64,3 @@ export default function PostCard({ post }: PostCardProps) {
     </Card>
   );
 }
-
-    

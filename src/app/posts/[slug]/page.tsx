@@ -1,5 +1,5 @@
 
-import * as postService from '@/lib/post-service'; // Updated import
+import * as postService from '@/lib/post-service'; 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
@@ -14,7 +14,6 @@ interface PostPageProps {
 }
 
 export async function generateStaticParams() {
-  // This function now reads from the post service (which reads from JSON)
   const posts = await postService.getAllPosts();
   return posts.map(post => ({
     slug: post.slug,
@@ -30,7 +29,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   }
   return {
     title: `${post.title} | Blogstatic`,
-    description: post.excerpt,
+    description: post.content.substring(0, 150).replace(/<[^>]*>?/gm, ''), // Use start of content for description
   };
 }
 
@@ -64,8 +63,8 @@ export default async function PostPage({ params }: PostPageProps) {
             <Image
               src={post.imageUrl}
               alt={post.title}
-              fill // Use fill for responsive images with aspect ratio controlled by parent
-              style={{objectFit:"cover"}} // Use objectFit: "cover"
+              fill 
+              style={{objectFit:"cover"}} 
               priority
               data-ai-hint="article banner"
             />
@@ -89,10 +88,7 @@ export default async function PostPage({ params }: PostPageProps) {
         </footer>
       )}
 
-      {/* AISuggestTags can remain as a client component, postContent and currentTags are passed as props */}
       <AISuggestTags postContent={post.content} currentTags={post.tags || []} />
     </article>
   );
 }
-
-    

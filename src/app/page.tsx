@@ -1,9 +1,9 @@
 
 import type { Post } from '@/types';
-import * as postService from '@/lib/post-service'; // Updated import
+import * as postService from '@/lib/post-service'; 
 import PostCard from '@/components/PostCard';
-import PaginationControlsClient from '@/components/PaginationControlsClient'; // New client component
-import SearchBarClient from '@/components/SearchBarClient'; // New client component
+import PaginationControlsClient from '@/components/PaginationControlsClient'; 
+import SearchBarClient from '@/components/SearchBarClient'; 
 import { Skeleton } from '@/components/ui/skeleton';
 
 const POSTS_PER_PAGE = 6;
@@ -44,7 +44,6 @@ function HomePageLoadingSkeleton() {
 
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  // Data fetching now happens in the Server Component
   const allPosts = await postService.getAllPosts();
 
   const currentPage = Number(searchParams?.page) || 1;
@@ -54,7 +53,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ? allPosts.filter(
         (post) =>
           post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
           post.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
       )
     : allPosts;
@@ -66,7 +64,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
 
-  if (allPosts.length === 0 && !searchTerm) { // Check initial load without search
+  if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
           <div className="flex justify-center">
@@ -83,7 +81,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <div className="space-y-12">
       <div className="flex justify-center">
-        {/* SearchBarClient handles search state and navigation */}
         <SearchBarClient initialSearchTerm={searchTerm} />
       </div>
 
@@ -101,7 +98,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       )}
       
-      {/* PaginationControlsClient handles page state and navigation */}
       <PaginationControlsClient
         currentPage={currentPage}
         totalPages={totalPages}
@@ -110,5 +106,3 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     </div>
   );
 }
-
-    
