@@ -68,11 +68,25 @@ async function seedInitialSettingsFromJson() {
       .eq('id', 1)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.warn('Could not check site_settings in DB for seeding:', JSON.stringify(fetchError, null, 2));
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means "Not a single row was found"
+      if ((fetchError as any).code === '42P01') { // 42P01 means "undefined_table"
+        console.error(
+          "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
+          "DATABASE SEEDING INFO: The 'public.site_settings' table was not found during the\n" +
+          "initial settings check. This is expected if the table hasn't been created yet.\n\n" +
+          "PLEASE RUN THE SQL SCRIPT provided by the AI assistant to create 'public.site_settings'.\n" +
+          "Once created, settings from 'data/settings.json' (if available) or defaults will be\n" +
+          "attempted to be seeded by the application automatically.\n" +
+          "The application will use default settings until the table exists and is populated.\n" +
+          "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+        );
+      } else {
+        console.warn('Could not check site_settings in DB for seeding (other error):', JSON.stringify(fetchError, null, 2));
+      }
       initialSettingsDataLoaded = true; // Mark as loaded to prevent repeated attempts if DB is misconfigured
-      return;
+      return; // Prevent further seeding attempts if table check fails significantly
     }
+
 
     if (!existingSettings || !existingSettings.settings || Object.keys(existingSettings.settings).length === 0) {
       console.log('Site settings in DB are empty/non-existent. Attempting to seed from settings.json...');
@@ -141,13 +155,33 @@ export async function getSettings(): Promise<SiteSettings> {
       console.error('Error fetching settings from Supabase:', errorDetails);
     }
 
-    if ((error as any).code !== 'PGRST116') { 
+    if ((error as any).code === '42P01') { // 42P01: relation "public.site_settings" does not exist
+        console.error(
+            "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
+            "CRITICAL DATABASE SETUP ISSUE: The 'public.site_settings' table does not exist.\n" +
+            "The application cannot load your custom site settings from the database.\n" +
+            "It will use default settings for now.\n\n" +
+            "TO FIX THIS: Please go to your Supabase project's SQL Editor and run the\n" +
+            "SQL script (provided in the AI assistant's instructions) to create this table.\n" +
+            "Look for the script that starts with: CREATE TABLE IF NOT EXISTS public.site_settings (...)\n" +
+            "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+        );
+    }
+
+    if ((error as any).code !== 'PGRST116') { // PGRST116 means "Not a single row was found" - it's okay if table exists but is empty, defaults will be used. But 42P01 means table is GONE.
         return { ...DEFAULT_SETTINGS_OBJ };
     }
   }
 
 
   if (!data || !data.settings) {
+    // This case can also happen if the table exists but the row with id=1 is missing
+    // and RLS prevents seeing it, or it was somehow deleted.
+    // The seedInitialSettingsFromJson should handle creating the row.
+    // If we reach here and data.settings is null/undefined, it means we should use defaults.
+    if (!error) { // If there was no error but data.settings is still null
+      console.warn("Site settings fetched successfully but 'settings' field is null or empty. Using default settings. This might occur if the row id=1 in 'site_settings' is missing or its 'settings' JSONB is null.");
+    }
     return { ...DEFAULT_SETTINGS_OBJ };
   }
 
