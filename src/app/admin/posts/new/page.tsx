@@ -24,12 +24,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, UploadCloud, Sparkles, AlertCircle } from 'lucide-react';
 import { storage } from '@/lib/firebase-config';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { createPostAction } from '@/app/actions';
 import type { Post } from '@/types';
+import { suggestTags } from '@/ai/flows/suggest-tags';
+import { Badge } from '@/components/ui/badge';
 
 
 const postFormSchema = z.object({
@@ -58,6 +60,10 @@ export default function NewPostPage() {
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+
+  const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [aiTagsError, setAiTagsError] = useState<string | null>(null);
 
 
   const form = useForm<PostFormClientValues>({
@@ -89,7 +95,7 @@ export default function NewPostPage() {
   const handleThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setThumbnailFile(file); // Keep file in state for potential retry or if needed
+      setThumbnailFile(file); 
       
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -97,7 +103,7 @@ export default function NewPostPage() {
       };
       reader.readAsDataURL(file);
 
-      form.setValue('thumbnailUrl', '', { shouldValidate: false }); // Clear previous URL
+      form.setValue('thumbnailUrl', '', { shouldValidate: false }); 
       form.clearErrors('thumbnailUrl');
       
       setIsUploadingThumbnail(true);
@@ -107,18 +113,15 @@ export default function NewPostPage() {
         toast({ title: "Uploading Thumbnail...", description: "Please wait." });
         const uploadedThumbnailUrl = await uploadFile(file, 'posts_images/thumbnails', 'thumbnail');
         form.setValue('thumbnailUrl', uploadedThumbnailUrl, { shouldValidate: true });
-        setThumbnailFile(null); // Clear file from state as it's uploaded and URL is set
+        setThumbnailFile(null); 
         toast({ title: "Thumbnail Uploaded", description: "Thumbnail ready." });
       } catch (error) {
         toast({ variant: "destructive", title: "Thumbnail Auto-Upload Failed", description: "Please try selecting the file again or check console." });
-        setThumbnailPreview(null); // Clear preview on error
-        setThumbnailFile(null); // Clear file from state
-        form.setValue('thumbnailUrl', '', { shouldValidate: true }); // Ensure URL is empty
+        setThumbnailPreview(null); 
+        setThumbnailFile(null); 
+        form.setValue('thumbnailUrl', '', { shouldValidate: true }); 
       } finally {
         setIsUploadingThumbnail(false);
-        // Optionally reset progress visual after a short delay or keep it at 100 if successful
-        // For simplicity, we'll let the progress bar reflect the last state (100 or 0 if error)
-        // or clear it: setUploadProgress(prev => ({ ...prev, thumbnail: 0 }));
       }
     } else {
       setThumbnailFile(null);
@@ -158,7 +161,7 @@ export default function NewPostPage() {
         async () => {
           try {
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            setUploadProgress(prev => ({ ...prev, [progressKey]: 100 })); // Ensure it hits 100 on completion
+            setUploadProgress(prev => ({ ...prev, [progressKey]: 100 })); 
             resolve(downloadURL);
           } catch (error) {
              console.error(`Failed to get download URL for ${progressKey}:`, error);
@@ -170,12 +173,56 @@ export default function NewPostPage() {
     });
   };
 
+  const handleSuggestTags = async () => {
+    const content = form.getValues('content');
+    if (!content || content.trim().length < 50) {
+      setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
+      setSuggestedAiTags([]);
+      return;
+    }
+    setIsSuggestingTags(true);
+    setAiTagsError(null);
+    setSuggestedAiTags([]);
+    try {
+      const result = await suggestTags({ blogPostContent: content });
+      const currentTagsString = form.getValues('tags') || '';
+      const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+      const newSuggestions = result.tags.filter(tag => !currentTagsArray.includes(tag.toLowerCase()));
+      setSuggestedAiTags(Array.from(new Set(newSuggestions)));
+      if (newSuggestions.length === 0 && result.tags.length > 0) {
+        toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
+      } else if (newSuggestions.length === 0) {
+        toast({ title: "AI Suggestions", description: "No new tags suggested."});
+      }
+    } catch (e) {
+      console.error('Error suggesting tags:', e);
+      setAiTagsError('Failed to suggest tags. Please try again.');
+    } finally {
+      setIsSuggestingTags(false);
+    }
+  };
+
+  const addAiTagToForm = (tagToAdd: string) => {
+    const currentTagsString = form.getValues('tags') || '';
+    const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+    
+    const tagToAddLower = tagToAdd.toLowerCase();
+    if (!currentTagsArray.includes(tagToAddLower)) {
+      const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
+      form.setValue('tags', newTagsString, { shouldValidate: true });
+      // Remove the added tag from suggestions
+      setSuggestedAiTags(prev => prev.filter(t => t.toLowerCase() !== tagToAddLower));
+    } else {
+      toast({
+        title: "Tag exists",
+        description: `The tag "${tagToAdd}" is already in your list.`
+      })
+    }
+  };
+
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
-    
-    // Thumbnail should already be uploaded and its URL in data.thumbnailUrl
-    // if a file was selected.
-    
+        
     const validationResult = await form.trigger();
     if (!validationResult || (thumbnailFile && !form.getValues('thumbnailUrl'))) {
         let description = "Please check the form for errors.";
@@ -226,12 +273,12 @@ export default function NewPostPage() {
           title: 'Post Created Successfully',
           description: `"${postPayload.title}" has been created.`,
         });
-        // Reset form and local state after successful submission
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
         setUploadProgress({});
-        // router.push('/admin/posts'); // Action already handles redirect
+        setSuggestedAiTags([]);
+        setAiTagsError(null);
       }
     } catch (error) {
       console.error("Error submitting post:", error);
@@ -242,8 +289,6 @@ export default function NewPostPage() {
       });
     } finally {
       setIsSubmittingForm(false);
-      // Clearing progress here might be too soon if user wants to see 100% for a bit
-      // setUploadProgress({});
     }
   };
 
@@ -272,7 +317,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isUploadingThumbnail} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -285,7 +330,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isUploadingThumbnail}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
                   <FormMessage />
@@ -301,7 +346,7 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isUploadingThumbnail || isSubmittingForm}
+                  disabled={isUploadingThumbnail || isSubmittingForm || isSuggestingTags}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -320,7 +365,7 @@ export default function NewPostPage() {
                 </div>
               )}
               <FormDescription>Select an image. It will be uploaded automatically (e.g., 400x300px).</FormDescription>
-              <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> {/* To display validation errors for the URL */}
+              <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> 
             </FormItem>
 
             <FormField
@@ -338,7 +383,7 @@ export default function NewPostPage() {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isUploadingThumbnail}
+                      disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -372,7 +417,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isUploadingThumbnail}
+                      disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -380,12 +425,72 @@ export default function NewPostPage() {
                 </FormItem>
               )}
             />
+
+            {/* AI Tag Suggestions Section */}
+            <Card className="bg-muted/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-semibold flex items-center">
+                  <Sparkles className="w-5 h-5 mr-2 text-primary" />
+                  AI Tag Suggestions
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Generate tag ideas based on your post content.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  type="button" 
+                  onClick={handleSuggestTags} 
+                  disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isSuggestingTags ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Suggesting Tags...
+                    </>
+                  ) : (
+                    'Suggest Tags with AI'
+                  )}
+                </Button>
+
+                {aiTagsError && (
+                  <div className="mt-3 text-destructive flex items-center text-sm">
+                    <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
+                  </div>
+                )}
+
+                {suggestedAiTags.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium mb-1.5">Click to add:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedAiTags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          variant="secondary"
+                          onClick={() => addAiTagToForm(tag)}
+                          className="cursor-pointer hover:bg-primary/20"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                 {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Write some content and click the button to get tag suggestions.
+                    </p>
+                  )}
+              </CardContent>
+            </Card>
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isUploadingThumbnail}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isUploadingThumbnail}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isUploadingThumbnail || isSuggestingTags}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -400,4 +505,4 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
+    
