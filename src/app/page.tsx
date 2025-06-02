@@ -1,10 +1,9 @@
 
 import type { Post } from '@/types';
-import * as postService from '@/lib/post-service'; 
+import * as postService from '@/lib/post-service';
 import { getSettings } from '@/lib/settings-service';
 import PostCard from '@/components/PostCard';
-import PaginationControlsClient from '@/components/PaginationControlsClient'; 
-// SearchBarClient is no longer needed here as it's only in the Header now
+import PaginationControlsClient from '@/components/PaginationControlsClient';
 
 interface HomePageProps {
   searchParams?: {
@@ -36,10 +35,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
-  if (allPosts.length === 0 && !searchTerm) { 
+  if (allPosts.length === 0 && !searchTerm) {
      return (
-        <div className="space-y-12">
-          {/* SearchBarClient removed from here */}
+        <div className="py-8"> {/* Adjusted padding */}
           <p className="text-center text-muted-foreground text-xl py-10">
             No posts have been created yet.
           </p>
@@ -48,9 +46,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   }
 
   return (
-    <div className="space-y-12">
-      {/* SearchBarClient and its wrapper div removed from here */}
-
+    <div className="py-8"> {/* Adjusted padding */}
       {paginatedPosts.length === 0 && searchTerm && (
         <p className="text-center text-muted-foreground text-xl py-10">
           No posts found for &quot;{searchTerm}&quot;. Try a different search term.
@@ -58,7 +54,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       )}
 
       {paginatedPosts.length > 0 && (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10"> {/* Increased gap */}
           {paginatedPosts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}

@@ -2,9 +2,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Post } from '@/types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import TagBadge from './TagBadge';
-import { CalendarDays, ArrowRight, Eye } from 'lucide-react'; // Added Eye icon
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// TagBadge is no longer used directly in the card for a minimal look
+import { CalendarDays, Eye } from 'lucide-react'; // ArrowRight removed
 
 interface PostCardProps {
   post: Post;
@@ -17,56 +17,49 @@ export default function PostCard({ post }: PostCardProps) {
     day: 'numeric',
   });
 
-  const displayImageUrl = post.thumbnailUrl; 
+  const displayImageUrl = post.thumbnailUrl;
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
+    <Card className="overflow-hidden border bg-card hover:bg-card/95 dark:hover:bg-card/90 transition-colors duration-200 flex flex-col h-full group rounded-lg">
       {displayImageUrl && (
-        <Link href={`/posts/${post.slug}`} className="block">
-          <div className="relative w-full h-48">
-            <Image
-              src={displayImageUrl}
-              alt={post.title}
-              fill 
-              style={{objectFit:"cover"}} 
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-              data-ai-hint="article thumbnail"
-            />
-          </div>
+        <Link href={`/posts/${post.slug}`} className="block overflow-hidden aspect-[16/9] relative">
+          <Image
+            src={displayImageUrl}
+            alt={post.title}
+            fill
+            style={{objectFit:"cover"}}
+            className="group-hover:scale-105 transition-transform duration-300 ease-in-out"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            data-ai-hint="article thumbnail"
+          />
         </Link>
       )}
-      <CardHeader>
+      <CardHeader className="p-4">
         <Link href={`/posts/${post.slug}`}>
-          <CardTitle className="font-headline text-xl hover:text-primary transition-colors">
+          <CardTitle className="font-headline text-lg hover:text-primary transition-colors line-clamp-2 leading-tight">
             {post.title}
           </CardTitle>
         </Link>
-        <div className="text-sm text-muted-foreground flex items-center mt-2 space-x-3">
+        <div className="text-xs text-muted-foreground flex items-center mt-2 space-x-3">
           <div className="flex items-center">
-            <CalendarDays className="w-4 h-4 mr-1.5" />
+            <CalendarDays className="w-3.5 h-3.5 mr-1" />
             <time dateTime={post.date}>{formattedDate}</time>
           </div>
           <div className="flex items-center">
-            <Eye className="w-4 h-4 mr-1.5" />
+            <Eye className="w-3.5 h-3.5 mr-1" />
             <span>{post.viewCount ?? 0}</span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-grow">
-        {/* Content preview can be added here if needed */}
+      <CardContent className="px-4 pb-4 pt-0 flex-grow">
+        {/* Minimal design, so no excerpt by default. Can be added if desired. */}
+        {/* 
+        <p className="text-sm text-muted-foreground line-clamp-3 mt-1">
+          A short summary or excerpt of the post could go here.
+        </p> 
+        */}
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-4 pt-4"> 
-        {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
-              <TagBadge key={tag} tag={tag} />
-            ))}
-          </div>
-        )}
-        <Link href={`/posts/${post.slug}`} className="text-primary hover:underline flex items-center self-end mt-auto pt-2">
-          Read More <ArrowRight className="w-4 h-4 ml-1" />
-        </Link>
-      </CardFooter>
+      {/* Footer with tags and "Read More" link is removed for minimalism */}
     </Card>
   );
 }
