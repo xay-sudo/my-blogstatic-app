@@ -57,7 +57,9 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(initialPostData.thumbnailUrl || null); 
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
+  const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [aiTagsError, setAiTagsError] = useState<string | null>(null);
 
 
   const form = useForm<PostFormClientValues>({
@@ -100,6 +102,61 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     }
   };
 
+  const handleManualSuggestTags = async () => {
+    const content = editorRef.current ? editorRef.current.getContent({format: 'text'}) : form.getValues('content');
+    if (!content || content.trim().length < 50) {
+      setAiTagsError('Content is too short (less than 50 characters) to suggest tags effectively.');
+      setSuggestedAiTags([]);
+      toast({
+        variant: "destructive",
+        title: "Content Too Short",
+        description: "AI tag suggestions require at least 50 characters of content.",
+      });
+      return;
+    }
+    setIsSuggestingTags(true);
+    setAiTagsError(null);
+    setSuggestedAiTags([]);
+    try {
+      const result = await suggestTags({ blogPostContent: content });
+      const currentTagsString = form.getValues('tags') || '';
+      const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+      const newSuggestions = result.tags.filter(tag => !currentTagsArray.includes(tag.toLowerCase()));
+
+      if (newSuggestions.length > 0) {
+        setSuggestedAiTags(Array.from(new Set(newSuggestions)));
+        toast({ title: "AI Tags Suggested!", description: "Review the suggestions below."});
+      } else if (result.tags.length > 0) {
+         toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
+      } else {
+         toast({ title: "AI Suggestions", description: "No new tags suggested by AI for this content."});
+      }
+    } catch (e) {
+      console.error('Error suggesting tags:', e);
+      setAiTagsError('Failed to suggest tags. Please try again.');
+      toast({ variant: "destructive", title: "AI Tagging Error", description: 'Could not fetch AI tag suggestions.' });
+    } finally {
+      setIsSuggestingTags(false);
+    }
+  };
+
+  const addAiTagToForm = (tagToAdd: string) => {
+    const currentTagsString = form.getValues('tags') || '';
+    const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+
+    const tagToAddLower = tagToAdd.toLowerCase();
+    if (!currentTagsArray.includes(tagToAddLower)) {
+      const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
+      form.setValue('tags', newTagsString, { shouldValidate: true, shouldDirty: true });
+      setSuggestedAiTags(prev => prev.filter(t => t.toLowerCase() !== tagToAddLower));
+    } else {
+      toast({
+        title: "Tag exists",
+        description: `The tag "${tagToAdd}" is already in your list.`
+      })
+    }
+  };
+
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
@@ -120,10 +177,14 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
 
     if (contentForAi && contentForAi.trim().length >= 50) {
       try {
-        toast({title: "Generating AI Tags...", description: "Please wait while tags are being generated for the content."});
-        setIsSuggestingTags(true);
+        toast({title: "Checking for AI Tags...", description: "Please wait while tags are being generated for the content."});
+        const tempIsSuggestingTags = isSuggestingTags; // Store current state
+        if (!isSuggestingTags) setIsSuggestingTags(true); // Set if not already suggesting (manual might be running)
+        
         const aiResult = await suggestTags({ blogPostContent: contentForAi });
-        setIsSuggestingTags(false);
+        
+        if (!tempIsSuggestingTags) setIsSuggestingTags(false); // Revert if this was an auto-suggestion
+
         const newAiTags = aiResult.tags.filter(tag => !finalTags.includes(tag.toLowerCase()));
         if (newAiTags.length > 0) {
           finalTags = [...finalTags, ...newAiTags.map(t => t.toLowerCase())];
@@ -136,7 +197,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
       } catch (e) {
         console.error('Error suggesting tags during save:', e);
         toast({variant: "destructive", title: "AI Tagging Failed on Save", description: "Could not generate AI tags automatically. Post will be saved with manual tags only."});
-        setIsSuggestingTags(false);
+        if (!isSuggestingTags) setIsSuggestingTags(false); // Ensure it's reset if save-time suggestion failed
       }
     }
     
@@ -174,6 +235,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
+        // Don't reset the form automatically, just the file input
+        // Keep AI suggestions if any, as user might want to save again.
       }
     } catch (error: any) {
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
@@ -313,6 +376,59 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                   </FormControl>
                   <FormDescription>Comma-separated tags. AI will also attempt to add relevant tags on save.</FormDescription>
                   <FormMessage />
+                  <div className="mt-3 space-y-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleManualSuggestTags} 
+                      disabled={isSuggestingTags || isSubmittingForm}
+                      className="text-sm"
+                    >
+                      {isSuggestingTags && !isSubmittingForm ? (
+                        <>
+                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                          Suggesting...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Suggest Tags with AI
+                        </>
+                      )}
+                    </Button>
+                    {aiTagsError && (
+                      <div className="text-destructive flex items-center text-sm">
+                        <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
+                      </div>
+                    )}
+                    {suggestedAiTags.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium mb-1 text-muted-foreground flex items-center">
+                          <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
+                          AI Suggestions (click to add):
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggestedAiTags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              onClick={() => addAiTagToForm(tag)}
+                              className="cursor-pointer hover:bg-primary/20 text-xs"
+                              title={`Add tag: ${tag}`}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
+                      <p className="text-xs text-muted-foreground">
+                        Click the button above to get AI tag suggestions based on the current content.
+                      </p>
+                    )}
+                  </div>
                 </FormItem>
               )}
             />
@@ -341,3 +457,4 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     </Card>
   );
 }
+
