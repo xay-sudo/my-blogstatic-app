@@ -32,8 +32,8 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
   if (!file) return undefined;
 
   if (!storage) {
-    console.error("Firebase Storage is not initialized. Check firebase-config.ts and environment variables.");
-    throw new Error("File upload service is not available. Please contact support.");
+    console.error("Firebase Storage is not initialized. Check firebase-config.ts and environment variables (especially NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET).");
+    throw new Error("File upload service is not available. Firebase Storage might be misconfigured in your project setup. Please contact support or check server logs.");
   }
 
   if (file.size > MAX_FILE_SIZE) {
@@ -55,14 +55,27 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
     return downloadURL;
   } catch (error: any) {
     console.error("Firebase Storage Upload Error:", error);
-    // Log more details for server-side debugging
-    console.error("Firebase Storage Server Response (if available):", error.serverResponse);
+    console.error("Firebase Storage Server Response (if available):", error.serverResponse); // Log full server response
+    
     let errorMessage = "Could not upload file to Firebase Storage.";
     if (error.code) {
-        errorMessage = `Firebase Storage: ${error.message || `An unknown error occurred. Code: ${error.code}`}`;
+      // Use the error message from Firebase if available, otherwise use a generic one for the code
+      let baseMessage = error.message || `An unknown error occurred. Code: ${error.code}`;
+      errorMessage = `Firebase Storage: ${baseMessage}`;
+      
+      if (error.code === 'storage/unknown') {
+        errorMessage += " This often indicates a Firebase project configuration issue. Please check: 1. Storage Security Rules in Firebase Console (allow writes to the 'thumbnails/' path for authenticated users). 2. Cloud Storage API is enabled in Google Cloud Console for your project. 3. The 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET' environment variable is correct. 4. Your Firebase project's billing status and quotas. Detailed server logs (Vercel logs) for 'Firebase Storage Server Response' may provide more specific clues.";
+      } else if (error.code === 'storage/unauthorized') {
+        errorMessage += " Check your Firebase Storage security rules. You might not have permission to write to the specified location.";
+      } else if (error.code === 'storage/object-not-found') {
+        errorMessage += " The file path in Storage might be incorrect or the object doesn't exist (should not happen for uploads).";
+      } else if (error.code === 'storage/quota-exceeded') {
+        errorMessage += " You have exceeded your Firebase Storage quota. Please check your plan and usage.";
+      }
     } else if (error.message) {
-        errorMessage = `Firebase Storage: ${error.message}`;
+      errorMessage = `Firebase Storage: ${error.message}`;
     }
+
     // Avoid "Firebase Storage: Firebase Storage:"
     if (errorMessage.startsWith("Firebase Storage: Firebase Storage: ")) {
       errorMessage = errorMessage.substring("Firebase Storage: ".length);
@@ -74,17 +87,13 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
 async function deleteFileFromFirebaseStorage(fileUrl: string | undefined) {
   if (!fileUrl || !storage) return;
 
-  // Extract path from URL
-  // Firebase Storage URLs look like: https://firebasestorage.googleapis.com/v0/b/YOUR_BUCKET/o/thumbnails%2Fimage.png?alt=media&token=TOKEN
   try {
     const url = new URL(fileUrl);
-    // The path starts after /o/ and ends before ?alt=media
     const pathWithBucket = url.pathname.split('/o/')[1];
     if (!pathWithBucket) {
         console.warn('Could not extract file path from Firebase Storage URL (no /o/ segment):', fileUrl);
         return;
     }
-    // Remove query parameters like ?alt=media&token=... from the path
     const filePath = decodeURIComponent(pathWithBucket.split('?')[0]);
 
     if (!filePath.startsWith('thumbnails/')) {
@@ -138,7 +147,6 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    // If upload succeeded but DB failed, try to delete the uploaded file from Firebase
     if (thumbnailUrl) await deleteFileFromFirebaseStorage(thumbnailUrl);
     return {
       success: false,
@@ -184,14 +192,13 @@ export async function updatePostAction(postId: string, formData: FormData) {
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
-      // If there's a current thumbnail, delete it from Firebase Storage
       if (currentThumbnailUrl) {
         await deleteFileFromFirebaseStorage(currentThumbnailUrl);
       }
       newUrlUploaded = await handleFileUploadToFirebase(newThumbnailFile);
       finalThumbnailUrl = newUrlUploaded;
     } else {
-      finalThumbnailUrl = currentThumbnailUrl; // Keep existing if no new file
+      finalThumbnailUrl = currentThumbnailUrl; 
     }
 
     const postData: PostServiceValues = {
@@ -202,7 +209,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      // If update failed but new image was uploaded, delete the new image
       if (newUrlUploaded) await deleteFileFromFirebaseStorage(newUrlUploaded);
       return {
         success: false,
@@ -212,7 +218,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
-    // If any error and a new image was uploaded, try to delete it
     if (newUrlUploaded) await deleteFileFromFirebaseStorage(newUrlUploaded);
     return {
       success: false,
@@ -233,7 +238,6 @@ export async function deletePostAction(postId: string) {
   try {
     const postToDelete = await postService.getPostById(postId);
     if (postToDelete?.thumbnailUrl) {
-      // Delete thumbnail from Firebase Storage
       await deleteFileFromFirebaseStorage(postToDelete.thumbnailUrl);
     }
     await postService.deletePostById(postId);
@@ -249,7 +253,6 @@ export async function deletePostAction(postId: string) {
   }
 }
 
-// Site Settings Action
 const siteSettingsSchema = z.object({
   siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100),
   siteDescription: z.string().min(10, { message: 'Site description must be at least 10 characters long.' }).max(300),
@@ -317,3 +320,5 @@ export async function updateSiteSettingsAction(formData: FormData) {
     };
   }
 }
+
+    
