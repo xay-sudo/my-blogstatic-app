@@ -21,47 +21,47 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+// Progress component might not be needed if not doing live client-side upload progress to Firebase
+// import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle } from 'lucide-react';
-import { storage } from '@/lib/firebase-config';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { useAuth } from '@/contexts/AuthContext';
+// Firebase storage imports are no longer needed here
+// import { storage } from '@/lib/firebase-config';
+// import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+// import { useAuth } from '@/contexts/AuthContext'; // Only needed if you restrict by user for local uploads, not for now
 import { createPostAction } from '@/app/actions';
-import type { Post } from '@/types';
+import type { Post } from '@/types'; // Keep for Post type if needed elsewhere, but payload to action changes
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
 
-
-const postFormSchema = z.object({
+// Client-side schema for immediate validation of text fields
+const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
-  tags: z.string()
-    .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
-    .optional(),
-  thumbnailUrl: z.string().url({ message: 'Please upload a valid thumbnail or ensure the URL is correct.' }).optional().or(z.literal('')),
+  tags: z.string().optional(), // Tags are sent as a comma-separated string
+  // thumbnailUrl is handled by file upload, not a direct form field string for URL
 });
 
-type PostFormClientValues = z.infer<typeof postFormSchema>;
+type PostFormClientValues = z.infer<typeof postFormClientSchema>;
 
-const MAX_THUMBNAIL_SIZE_MB = 2;
+const MAX_THUMBNAIL_SIZE_MB = 5; // Max size for client-side warning
 const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { user } = useAuth();
+  // const { user } = useAuth(); // Not directly used for local file saving path here
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  // const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({}); // Firebase specific
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
-  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  // const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false); // Firebase specific
 
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
@@ -69,13 +69,12 @@ export default function NewPostPage() {
 
 
   const form = useForm<PostFormClientValues>({
-    resolver: zodResolver(postFormSchema),
+    resolver: zodResolver(postFormClientSchema),
     defaultValues: {
       title: '',
       slug: '',
       content: '<p>Write your blog post content here...</p>',
       tags: '',
-      thumbnailUrl: '',
     },
     mode: 'onChange',
   });
@@ -94,7 +93,7 @@ export default function NewPostPage() {
     }
   }, [watchedTitle, form]);
 
-  const handleThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -102,7 +101,7 @@ export default function NewPostPage() {
         toast({
           variant: "default", 
           title: "Large File Selected",
-          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it first or proceed with caution.`,
+          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Consider optimizing it first.`,
           duration: 7000, 
         });
       }
@@ -114,94 +113,14 @@ export default function NewPostPage() {
         setThumbnailPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      form.setValue('thumbnailUrl', '', { shouldValidate: false }); 
-      form.clearErrors('thumbnailUrl');
-      
-      setIsUploadingThumbnail(true);
-      setUploadProgress(prev => ({ ...prev, thumbnail: 0 }));
-
-      try {
-        toast({ title: "Uploading Thumbnail...", description: "Please wait." });
-        const uploadedThumbnailUrl = await uploadFile(file, 'posts_images/thumbnails', 'thumbnail');
-        form.setValue('thumbnailUrl', uploadedThumbnailUrl, { shouldValidate: true });
-        setThumbnailFile(null); 
-        toast({ title: "Thumbnail Uploaded", description: "Thumbnail ready." });
-      } catch (error) {
-        toast({ variant: "destructive", title: "Thumbnail Auto-Upload Failed", description: "Please try selecting the file again or check console." });
-        setThumbnailPreview(null); 
-        setThumbnailFile(null); 
-        form.setValue('thumbnailUrl', '', { shouldValidate: true }); 
-        if (e.target) { // Reset file input value
-            e.target.value = '';
-        }
-      } finally {
-        setIsUploadingThumbnail(false);
-      }
+      // No auto-upload here for local storage, file is sent with form
     } else {
       setThumbnailFile(null);
       setThumbnailPreview(null);
-      form.setValue('thumbnailUrl', '', { shouldValidate: true });
-       if (e.target) { // Also reset if no file is selected (e.g. dialog cancelled)
+       if (e.target) {
             e.target.value = '';
        }
     }
-  };
-
-  const uploadFile = async (file: File, path: string, progressKey: string): Promise<string> => {
-    if (!storage) {
-      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured. Check console." });
-      console.error("Firebase Storage is not configured. Ensure NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET and other Firebase config variables are set.");
-      throw new Error("Firebase Storage not configured.");
-    }
-    if (!user) {
-      toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to upload files." });
-      throw new Error("User not authenticated for upload.");
-    }
-
-    const timestamp = new Date().getTime();
-    const uniqueFileName = `${timestamp}_${file.name.replace(/\s+/g, '_')}`;
-    const storageRef = ref(storage, `${path}/${user.uid}/${uniqueFileName}`);
-    
-    return new Promise((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(prev => ({ ...prev, [progressKey]: progress }));
-        },
-        (error) => {
-          console.error(`Upload error for ${progressKey}:`, error);
-          let errorMessage = "An unknown error occurred during upload.";
-          switch (error.code) {
-            case 'storage/unauthorized':
-              errorMessage = "Permission denied. Check Firebase Storage rules.";
-              break;
-            case 'storage/canceled':
-              errorMessage = "Upload canceled.";
-              break;
-            case 'storage/unknown':
-              errorMessage = "An unknown error occurred, possibly network-related.";
-              break;
-          }
-          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: errorMessage });
-          setUploadProgress(prev => ({ ...prev, [progressKey]: 0 }));
-          reject(error);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            setUploadProgress(prev => ({ ...prev, [progressKey]: 100 })); 
-            resolve(downloadURL);
-          } catch (error) {
-             console.error(`Failed to get download URL for ${progressKey}:`, error);
-             toast({ variant: "destructive", title: `Upload Error: ${progressKey}`, description: "Could not get download URL."});
-             reject(error);
-          }
-        }
-      );
-    });
   };
 
   const handleSuggestTags = async () => {
@@ -254,17 +173,6 @@ export default function NewPostPage() {
     setIsSubmittingForm(true);
         
     const validationResult = await form.trigger();
-    // Check if a thumbnail was selected but its URL is not in the form (i.e. upload failed or was incomplete)
-    if (thumbnailFile && !form.getValues('thumbnailUrl')) {
-        toast({
-            variant: "destructive",
-            title: "Thumbnail Upload Incomplete",
-            description: "A thumbnail image was selected, but its upload did not complete successfully. Please re-select the image or remove it before submitting.",
-        });
-        setIsSubmittingForm(false);
-        return;
-    }
-    
     if (!validationResult) {
         toast({
             variant: "destructive",
@@ -275,23 +183,19 @@ export default function NewPostPage() {
         return;
     }
     
-    const dataForAction = form.getValues();
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('slug', data.slug);
+    formData.append('content', data.content);
+    formData.append('tags', data.tags || ''); // Send as comma-separated string
 
-    const processedTags = typeof dataForAction.tags === 'string'
-        ? dataForAction.tags.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0)
-        : (Array.isArray(dataForAction.tags) ? dataForAction.tags : []);
-
-
-    const postPayload: Omit<Post, 'id' | 'date'> = {
-      title: dataForAction.title,
-      slug: dataForAction.slug,
-      content: dataForAction.content,
-      tags: processedTags,
-      thumbnailUrl: dataForAction.thumbnailUrl,
-    };
+    if (thumbnailFile) {
+      formData.append('thumbnailFile', thumbnailFile);
+    }
 
     try {
-      const result = await createPostAction(postPayload);
+      // @ts-ignore createPostAction expects FormData, but TS might not infer it well here
+      const result = await createPostAction(formData); 
       if (result?.success === false) {
          toast({
           variant: "destructive",
@@ -308,16 +212,17 @@ export default function NewPostPage() {
       } else {
         toast({
           title: 'Post Created Successfully',
-          description: `"${postPayload.title}" has been created.`,
+          description: `"${data.title}" has been created.`,
         });
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
-        setUploadProgress({});
+        // setUploadProgress({}); // Not needed for local
         setSuggestedAiTags([]);
         setAiTagsError(null);
-        if (document.getElementById('thumbnail-upload') as HTMLInputElement) {
-          (document.getElementById('thumbnail-upload') as HTMLInputElement).value = '';
+        const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
+        if (thumbnailUploadInput) {
+          thumbnailUploadInput.value = '';
         }
         router.push('/admin/posts'); 
       }
@@ -358,7 +263,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -371,7 +276,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
                   <FormMessage />
@@ -387,10 +292,11 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isUploadingThumbnail || isSubmittingForm || isSuggestingTags}
+                  disabled={isSubmittingForm || isSuggestingTags}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
+              {/* Remove Firebase specific upload indicators
               {isUploadingThumbnail && (
                 <div className="flex items-center mt-2 text-sm text-muted-foreground">
                   <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -400,15 +306,16 @@ export default function NewPostPage() {
               {uploadProgress['thumbnail'] > 0 && (
                 <Progress value={uploadProgress['thumbnail']} className="w-full mt-2 h-2" />
               )}
+              */}
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
                 </div>
               )}
               <FormDescription>
-                Select an image. It will be uploaded automatically. For faster uploads, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB).
+                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB).
               </FormDescription>
-              <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> 
+              {/* No direct FormField for thumbnailUrl, handled by file input and server */}
             </FormItem>
 
             <FormField
@@ -426,7 +333,7 @@ export default function NewPostPage() {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -460,7 +367,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -469,7 +376,7 @@ export default function NewPostPage() {
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || isUploadingThumbnail || !form.getValues('content') || form.getValues('content').length < 50}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -521,10 +428,10 @@ export default function NewPostPage() {
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isUploadingThumbnail || isSuggestingTags}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -539,6 +446,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
-
-    
