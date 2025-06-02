@@ -21,17 +21,28 @@ let auth: Auth; // Explicitly type auth
 // Ensure Firebase client SDK is only initialized in the browser
 if (typeof window !== 'undefined') {
   if (!getApps().length) {
-    if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
-      // Changed from console.warn to console.error for greater visibility
-      console.error(
-        "CRITICAL FIREBASE CONFIGURATION ERROR: Firebase API Key, Auth Domain, or Project ID is missing. " +
-        "Firebase will likely fail or behave unexpectedly. " +
-        "Please ensure your .env.local file is set up correctly with NEXT_PUBLIC_FIREBASE_API_KEY, " +
-        "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, and NEXT_PUBLIC_FIREBASE_PROJECT_ID."
-      );
-      // Note: Even with this error, initialization is still attempted below.
-      // A more robust app might prevent initialization or throw an error here.
+    let configError = false;
+    if (!firebaseConfig.apiKey) {
+      console.error("CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_API_KEY is missing or empty. Please check your .env.local file.");
+      configError = true;
     }
+    if (!firebaseConfig.authDomain) {
+      console.error("CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN is missing or empty. Please check your .env.local file.");
+      configError = true;
+    }
+    if (!firebaseConfig.projectId) {
+      console.error("CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_PROJECT_ID is missing or empty. Please check your .env.local file.");
+      configError = true;
+    }
+
+    if (configError) {
+      console.error(
+        "Firebase will likely fail or behave unexpectedly. " +
+        "Please ensure your .env.local file is set up correctly with all required NEXT_PUBLIC_FIREBASE_... variables, " +
+        "and restart your development server."
+      );
+    }
+    
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
   } else {
@@ -39,18 +50,13 @@ if (typeof window !== 'undefined') {
     auth = getAuth(app);
   }
 } else {
-  // This block is for server-side, where client SDK isn't typically used for auth.
+  // This block is for server-side.
+  // For client-side authentication, initialization happens in the `if (typeof window !== 'undefined')` block.
   // To satisfy TypeScript for `app` and `auth` being definitely assigned if they were used server-side,
-  // they would need placeholder assignments or a different logic path (e.g., Firebase Admin SDK).
-  // However, for client-side authentication, these are initialized above within the `typeof window !== 'undefined'` block.
-  // To avoid "used before assigned" errors if there were any server-side usages of these specific `app` and `auth` instances (which there are not in this setup):
-  // We can assign temporary placeholders for a server context, though they won't be functional for client auth.
-  // This is mostly a formality for strict TypeScript if the variables were global and accessed server-side.
-  // Given they are scoped and primarily for client, the browser check handles their primary init.
-  // To ensure `app` and `auth` are defined for export, even if non-functional server-side:
-  if (!getApps().length && firebaseConfig.apiKey) { // Basic check to allow dummy init if config seems plausible
-      // @ts-ignore - Temporary assignment for type satisfaction if accessed server-side
-      app = initializeApp(firebaseConfig); // Dummy init for server, not truly functional for client auth
+  // we provide a fallback initialization, though it's not ideal for client auth features on server.
+  if (!getApps().length && firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+      // @ts-ignore - Assigning for type satisfaction in server context if needed elsewhere.
+      app = initializeApp(firebaseConfig);
       // @ts-ignore
       auth = getAuth(app);
   } else if (getApps().length) {
@@ -59,16 +65,13 @@ if (typeof window !== 'undefined') {
       // @ts-ignore
       auth = getAuth(app);
   } else {
-      // Fallback if no app can be initialized (e.g. missing config server-side)
-      // This would lead to errors if auth is used server-side without proper Admin SDK setup.
-      // console.error("Firebase cannot be initialized on the server with client config.");
-      // To satisfy export type, these need a value. Null or a specific error state object could be used.
-      // However, this path should ideally not be hit for client auth functionality.
-      // For the purpose of this fix, focusing on client-side, this is less critical.
-      // The provided code exports `app` and `auth` initialized within the client-side check.
+      // console.error("Firebase cannot be initialized on the server with client config without all required keys.");
+      // To ensure 'app' and 'auth' have some value for export even in this unlikely server path without full config:
+      // @ts-ignore
+      app = undefined; 
+      // @ts-ignore
+      auth = undefined;
   }
 }
 
-
 export { app, auth };
-
