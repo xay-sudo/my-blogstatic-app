@@ -182,8 +182,8 @@ export default function NewPostPage() {
     }
     setIsScraping(true);
     setScrapingError(null);
-    setThumbnailFile(null); // Clear any manually selected file
-    setThumbnailPreview(null); // Clear preview
+    setThumbnailFile(null); 
+    setThumbnailPreview(null);
   
     if (!app) {
       const errorMsg = "Firebase app is not initialized. Cannot call Cloud Function.";
@@ -203,13 +203,24 @@ export default function NewPostPage() {
       const result: HttpsCallableResult<ScrapedPostData> = await scrapePostFunction({ url: scrapeUrl });
       const scrapedData = result.data;
       
+      let populatedTitle = 'Untitled Post';
       if (scrapedData.title) {
         form.setValue('title', scrapedData.title, { shouldValidate: true, shouldDirty: true });
+        populatedTitle = scrapedData.title;
+      } else {
+        form.setValue('title', `Post from ${new URL(scrapeUrl).hostname}`, { shouldValidate: true, shouldDirty: true });
       }
+
       if (scrapedData.content) {
         form.setValue('content', scrapedData.content, { shouldValidate: true, shouldDirty: true });
         if (editorRef.current) {
           editorRef.current.setContent(scrapedData.content);
+        }
+      } else {
+        const defaultContent = `<p>Content from ${scrapeUrl} could not be fully extracted. Please review and edit.</p>`;
+        form.setValue('content', defaultContent, { shouldValidate: true, shouldDirty: true });
+        if (editorRef.current) {
+          editorRef.current.setContent(defaultContent);
         }
       }
       
@@ -218,16 +229,27 @@ export default function NewPostPage() {
         toast({ 
           title: "Thumbnail Previewed", 
           description: "A thumbnail was found and is previewed. To use it, please download it and re-upload it via the 'Thumbnail Image' field below, or select another image. The previewed image will not be saved automatically.",
-          duration: 10000 // Longer duration for this important message
+          duration: 10000 
         });
+      } else {
+         setThumbnailPreview(`https://placehold.co/600x400.png?text=No+Image+Found`);
       }
   
-      toast({ title: "Content Populated", description: "Form fields have been populated from the URL. Please review and adjust as needed." });
+      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
     } catch (error: any) {
       console.error("Error scraping content via Cloud Function:", error);
-      const errorMessage = error.message || "Failed to scrape content from URL. The server might have blocked the request or the URL might be invalid.";
-      setScrapingError(errorMessage);
-      toast({ variant: "destructive", title: "Scraping Error", description: errorMessage });
+      let toastMessage = "An unknown error occurred during scraping.";
+      const details = error.details ? ` Details: ${JSON.stringify(error.details)}` : '';
+
+      if (error.code === 'internal') {
+        toastMessage = "An internal error occurred in the scraping function. Please check the Cloud Function logs in Firebase for more details.";
+      } else if (error.message) {
+        toastMessage = `${error.message}${details}`;
+      }
+      
+      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown error'}${details}. Please check the URL or try again. If the problem persists, check the Cloud Function logs.`;
+      setScrapingError(fullErrorMessageForState);
+      toast({ variant: "destructive", title: "Scraping Error", description: toastMessage, duration: 8000 });
     } finally {
       setIsScraping(false);
     }
