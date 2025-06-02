@@ -3,9 +3,8 @@
 
 import Link from 'next/link';
 import type { SiteSettings } from '@/types';
-import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { Suspense } from 'react'; // Removed useCallback as it's not used
+import React from 'react'; 
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface HeaderProps {
@@ -13,16 +12,6 @@ interface HeaderProps {
   isAdminLoggedIn?: boolean;
 }
 
-function SearchBarFallback() {
-  return (
-    <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-md items-center space-x-2" aria-busy="true" aria-live="polite">
-      <Skeleton className="h-10 flex-grow" />
-      <Skeleton className="h-10 w-10" />
-      <span className="sr-only">Loading search bar...</span>
-    </div>
-  );
-
-}
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
 
   return (
@@ -49,9 +38,7 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           </div>
           <div className="flex items-center space-x-2"> {/* Container for search and toggle */}
             <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
-              <Suspense fallback={<SearchBarFallback />}>
-                <SearchBarClient />
-              </Suspense>
+              <SearchBarClient />
             </div>
             <ThemeToggle /> {/* Theme toggle button */}
           </div>
