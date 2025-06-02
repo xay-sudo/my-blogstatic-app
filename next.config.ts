@@ -13,16 +13,28 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'placehold.co',
+        hostname: '*.*', // Allow any hostname with at least one dot (e.g., example.com, cdn.example.com)
         port: '',
         pathname: '/**',
       },
       {
-        protocol: 'https',
-        hostname: 'newvideo1.info', // Added this new domain
+        protocol: 'http',
+        hostname: '*.*', // Allow any hostname with at least one dot for HTTP
         port: '',
         pathname: '/**',
       },
+      { // Fallback for single-word hostnames (less common for image hosting, but for completeness)
+        protocol: 'https',
+        hostname: '*', 
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'http',
+        hostname: '*',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };
