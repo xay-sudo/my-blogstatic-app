@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
-import SearchBarClient from '@/components/SearchBarClient'; // Import SearchBarClient
+import SearchBarClient from '@/components/SearchBarClient';
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -104,18 +104,16 @@ export default function Header({ siteSettings }: HeaderProps) {
       <nav className="bg-foreground text-background shadow-md">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
-            {!isLoadingAuth && isAdminLoggedIn && (
+            {isLoadingAuth ? (
+              <Skeleton className="h-5 w-20" /> 
+            ) : isAdminLoggedIn ? (
               <Link href="/admin" className="flex items-center text-sm hover:text-primary transition-colors">
                 <ShieldCheck className="w-5 h-5 mr-1" />
                 Admin
               </Link>
-            )}
-             {isLoadingAuth && (
-              <Skeleton className="h-5 w-20 bg-background/20" />
-            )}
+            ) : null}
           </div>
-          {/* Replace search icon button with SearchBarClient */}
-          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md"> {/* Added wrapper for width control */}
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
             <SearchBarClient />
           </div>
         </div>
