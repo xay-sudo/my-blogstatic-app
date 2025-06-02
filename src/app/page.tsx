@@ -43,7 +43,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
      return (
         <div className="space-y-12">
           {/* Banner div removed from here, handled by Header.tsx */}
-          <div className="flex justify-start"> {/* Changed from justify-center */}
+          <div className="flex justify-end"> {/* Changed from justify-start to justify-end */}
              <SearchBarClient initialSearchTerm={searchTerm} />
           </div>
           <p className="text-center text-muted-foreground text-xl py-10">
@@ -57,7 +57,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <div className="space-y-12">
       {/* Banner div removed from here, handled by Header.tsx */}
 
-      <div className="flex justify-start"> {/* Changed from justify-center */}
+      <div className="flex justify-end"> {/* Changed from justify-start to justify-end */}
         <SearchBarClient initialSearchTerm={searchTerm} />
       </div>
 
@@ -83,3 +83,4 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     </div>
   );
 }
+
