@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Post } from '@/types';
@@ -26,8 +27,9 @@ export default function PostCard({ post }: PostCardProps) {
             <Image
               src={displayImageUrl}
               alt={post.title}
-              layout="fill"
-              objectFit="cover"
+              fill // Use fill for responsive images
+              style={{objectFit:"cover"}} // Use objectFit: "cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Example sizes, adjust as needed
               data-ai-hint="article content"
             />
           </div>
@@ -48,17 +50,19 @@ export default function PostCard({ post }: PostCardProps) {
         <p className="text-muted-foreground leading-relaxed">{post.excerpt}</p>
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-4">
-        {post.tags.length > 0 && (
+        {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {post.tags.map((tag) => (
               <TagBadge key={tag} tag={tag} />
             ))}
           </div>
         )}
-        <Link href={`/posts/${post.slug}`} className="text-primary hover:underline flex items-center self-end">
+        <Link href={`/posts/${post.slug}`} className="text-primary hover:underline flex items-center self-end mt-auto pt-2">
           Read More <ArrowRight className="w-4 h-4 ml-1" />
         </Link>
       </CardFooter>
     </Card>
   );
 }
+
+    

@@ -1,4 +1,7 @@
+
 import { Skeleton } from "@/components/ui/skeleton";
+
+const POSTS_PER_PAGE = 6; // Consistent with home page
 
 export default function Loading() {
   return (
@@ -7,8 +10,8 @@ export default function Loading() {
         <Skeleton className="h-10 w-full max-w-md" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[...Array(6)].map((_, index) => (
-          <div key={index} className="flex flex-col space-y-3 p-4 border rounded-lg bg-card">
+        {[...Array(POSTS_PER_PAGE)].map((_, index) => (
+          <div key={index} className="flex flex-col space-y-3 p-4 border rounded-lg bg-card shadow">
             <Skeleton className="h-[200px] w-full rounded-xl" />
             <div className="space-y-2 pt-2">
               <Skeleton className="h-6 w-3/4" />
@@ -22,6 +25,13 @@ export default function Loading() {
           </div>
         ))}
       </div>
+      <div className="flex justify-center items-center space-x-4 mt-12">
+        <Skeleton className="h-10 w-28" />
+        <Skeleton className="h-6 w-20" />
+        <Skeleton className="h-10 w-24" />
+      </div>
     </div>
   );
 }
+
+    

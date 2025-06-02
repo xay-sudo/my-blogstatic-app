@@ -25,34 +25,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon } from 'lucide-react'; // Use Lucide Loader
 import { storage } from '@/lib/firebase-config'; 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
+import { createPostAction } from '@/app/actions'; // Import the server action
+import type { Post } from '@/types';
 
 
+// Schema for client-side validation, should match server action's schema basis
 const postFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   excerpt: z.string().min(10, { message: 'Excerpt must be at least 10 characters long.' }).max(300, { message: 'Excerpt must be 300 characters or less.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
-  tags: z.string()
-    .refine(value => value === '' || /^[a-zA-Z0-9\s,-]+$/.test(value), {
-      message: 'Tags can only contain letters, numbers, spaces, commas, and hyphens.',
-    })
+  tags: z.string() // Input will be a string
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
   imageUrl: z.string().url({ message: 'Please enter a valid URL or upload an image.' }).optional().or(z.literal('')),
   thumbnailUrl: z.string().url({ message: 'Please enter a valid URL or upload a thumbnail.' }).optional().or(z.literal('')),
 });
 
-type PostFormValues = z.infer<typeof postFormSchema>;
+type PostFormClientValues = z.infer<typeof postFormSchema>;
+
 
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth(); // For Firebase Storage user context
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
@@ -61,17 +62,17 @@ export default function NewPostPage() {
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
-  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false); // Renamed for clarity
 
 
-  const form = useForm<PostFormValues>({
+  const form = useForm<PostFormClientValues>({
     resolver: zodResolver(postFormSchema),
     defaultValues: {
       title: '',
       slug: '',
       excerpt: '',
       content: '<p>Write your blog post content here...</p>',
-      tags: [],
+      tags: '', // Initialize as empty string for input
       imageUrl: '',
       thumbnailUrl: '',
     },
@@ -85,9 +86,9 @@ export default function NewPostPage() {
       const newSlug = watchedTitle
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^\w-]+/g, '')
-        .replace(/--+/g, '-');
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/[^\w-]+/g, '') // Remove non-alphanumeric characters except hyphens
+        .replace(/--+/g, '-'); // Replace multiple hyphens with a single one
       form.setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
     }
   }, [watchedTitle, form]);
@@ -96,7 +97,7 @@ export default function NewPostPage() {
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: React.Dispatch<React.SetStateAction<File | null>>,
     setPreview: React.Dispatch<React.SetStateAction<string | null>>,
-    urlField: keyof PostFormValues
+    urlField: keyof Pick<PostFormClientValues, 'imageUrl' | 'thumbnailUrl'>
   ) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -106,8 +107,8 @@ export default function NewPostPage() {
         setPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      form.setValue(urlField, ''); // Clear any manually entered URL, it will be set after upload
-      form.clearErrors(urlField); // Clear potential URL validation errors
+      form.setValue(urlField, ''); 
+      form.clearErrors(urlField); 
     } else {
       setFile(null);
       setPreview(null);
@@ -116,7 +117,7 @@ export default function NewPostPage() {
 
   const uploadFile = async (file: File, path: string, progressKey: string): Promise<string> => {
     if (!storage) {
-      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured. Check console and .env.local file." });
+      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured." });
       throw new Error("Firebase Storage not configured.");
     }
     if (!user) {
@@ -126,7 +127,6 @@ export default function NewPostPage() {
 
     const timestamp = new Date().getTime();
     const uniqueFileName = `${timestamp}_${file.name.replace(/\s+/g, '_')}`;
-    // Path structure: posts_images/thumbnails_or_main/userId/filename
     const storageRef = ref(storage, `${path}/${user.uid}/${uniqueFileName}`);
     
     return new Promise((resolve, reject) => {
@@ -158,70 +158,105 @@ export default function NewPostPage() {
     });
   };
 
-
-  const onSubmit = async (data: PostFormValues) => {
-    setIsUploading(true);
-    let submittedData = { ...data }; // Work with a copy
+  const onSubmit = async (data: PostFormClientValues) => {
+    setIsSubmittingForm(true);
+    let finalData = { ...data };
 
     try {
       if (thumbnailFile) {
         toast({ title: "Uploading Thumbnail...", description: "Please wait." });
         const uploadedThumbnailUrl = await uploadFile(thumbnailFile, 'posts_images/thumbnails', 'thumbnail');
-        submittedData.thumbnailUrl = uploadedThumbnailUrl;
+        finalData.thumbnailUrl = uploadedThumbnailUrl;
         form.setValue('thumbnailUrl', uploadedThumbnailUrl, {shouldValidate: true}); 
       }
       if (mainImageFile) {
          toast({ title: "Uploading Main Image...", description: "Please wait." });
         const uploadedImageUrl = await uploadFile(mainImageFile, 'posts_images/main', 'mainImage');
-        submittedData.imageUrl = uploadedImageUrl;
+        finalData.imageUrl = uploadedImageUrl;
         form.setValue('imageUrl', uploadedImageUrl, {shouldValidate: true});
       }
     } catch (error) {
-      setIsUploading(false);
+      setIsSubmittingForm(false);
       setUploadProgress({});
-      // Error toast is handled within uploadFile
-      return;
+      return; // Error toast handled in uploadFile
     }
     
-    // Re-validate the entire form data now that URLs are potentially set
-    const validationResult = await form.trigger();
+    const validationResult = await form.trigger(); // Re-trigger validation for potentially updated URL fields
     if (!validationResult) {
-      toast({
-          variant: "destructive",
-          title: "Validation Error",
-          description: "Please check the form for errors after image processing.",
-      });
-      setIsUploading(false);
-      return;
+        toast({
+            variant: "destructive",
+            title: "Validation Error",
+            description: "Please check the form for errors after image processing.",
+        });
+        setIsSubmittingForm(false);
+        return;
     }
+    
+    // Get latest values after potential uploads
+    const dataForAction = form.getValues();
 
-    // Get the latest values which include uploaded URLs
-    const finalData = form.getValues();
+    // Ensure tags are an array of strings for the server action
+    const processedTags = typeof dataForAction.tags === 'string'
+        ? dataForAction.tags.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0)
+        : (Array.isArray(dataForAction.tags) ? dataForAction.tags : []);
 
-    const finalTags = Array.isArray(finalData.tags) ? finalData.tags :
-                      (typeof finalData.tags === 'string' ? finalData.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []);
 
-    const newPostData = {
-      ...finalData,
-      tags: finalTags,
+    const postPayload: Omit<Post, 'id' | 'date'> = {
+      title: dataForAction.title,
+      slug: dataForAction.slug,
+      excerpt: dataForAction.excerpt,
+      content: dataForAction.content,
+      tags: processedTags,
+      imageUrl: dataForAction.imageUrl,
+      thumbnailUrl: dataForAction.thumbnailUrl,
     };
 
-    console.log('New post data (mock submission):', newPostData);
-
-    toast({
-      title: 'Post Created (Mock)',
-      description: `"${newPostData.title}" has been "created". This is a mock operation.`,
-    });
-    setIsUploading(false);
-    setUploadProgress({});
-    // Reset files and previews
-    setThumbnailFile(null);
-    setThumbnailPreview(null);
-    setMainImageFile(null);
-    setMainImagePreview(null);
-    form.reset(); // Reset the form to default values
-    router.push('/admin/posts');
+    try {
+      const result = await createPostAction(postPayload);
+      if (result?.success === false) {
+         toast({
+          variant: "destructive",
+          title: 'Failed to Create Post',
+          description: result.message || 'An unknown error occurred.',
+        });
+        if (result.errors) {
+          // Set form errors if provided by server action
+          Object.entries(result.errors).forEach(([fieldName, errors]) => {
+             if (Array.isArray(errors) && errors.length > 0) {
+                form.setError(fieldName as keyof PostFormClientValues, { type: 'server', message: errors.join(', ') });
+             }
+          });
+        }
+      } else {
+        // If createPostAction redirects, this part might not be reached.
+        // If it returns an object or nothing on success (and doesn't redirect itself), handle success UI here.
+        toast({
+          title: 'Post Created Successfully',
+          description: `"${postPayload.title}" has been created.`,
+        });
+        // Reset form and navigate, assuming redirect is not handled by server action
+        // or if you want explicit client-side navigation control after a non-redirecting server action.
+        // router.push('/admin/posts'); // Server action handles redirect
+        // form.reset(); // Server action redirect implies a new page load, form reset might not be strictly needed.
+      }
+    } catch (error) {
+      console.error("Error submitting post:", error);
+      toast({
+        variant: "destructive",
+        title: 'Submission Error',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+      });
+    } finally {
+      setIsSubmittingForm(false);
+      setUploadProgress({});
+      // Only reset files and previews if not redirecting or upon specific success without redirect
+      // setThumbnailFile(null);
+      // setThumbnailPreview(null);
+      // setMainImageFile(null);
+      // setMainImagePreview(null);
+    }
   };
+
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg">
@@ -292,7 +327,8 @@ export default function NewPostPage() {
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
-                        field.onChange(content);
+                        field.onChange(content); // Update RHF field
+                        form.trigger('content'); // Manually trigger validation for content
                       }}
                       init={{
                         height: 500,
@@ -328,8 +364,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      value={Array.isArray(field.value) ? field.value.join(', ') : (field.value || '')}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      // Field value is already handled by RHF with transform
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -338,7 +373,6 @@ export default function NewPostPage() {
               )}
             />
 
-            {/* Thumbnail Upload Field */}
             <FormItem>
               <FormLabel htmlFor="thumbnail-upload">Thumbnail Image (Optional)</FormLabel>
               <FormControl>
@@ -355,7 +389,7 @@ export default function NewPostPage() {
               )}
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} objectFit="cover" className="rounded" />
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" />
                 </div>
               )}
               <FormDescription>Upload a thumbnail (e.g., 400x300px). If you provide a URL below, this upload will be ignored.</FormDescription>
@@ -371,7 +405,7 @@ export default function NewPostPage() {
                         {...field} 
                         onChange={(e) => {
                           field.onChange(e);
-                          if (e.target.value) { setThumbnailFile(null); setThumbnailPreview(null); } // Clear file if URL is typed
+                          if (e.target.value) { setThumbnailFile(null); setThumbnailPreview(null); }
                         }}
                         disabled={!!thumbnailFile}
                       />
@@ -382,7 +416,6 @@ export default function NewPostPage() {
               />
             </FormItem>
 
-            {/* Main Image Upload Field */}
              <FormItem>
               <FormLabel htmlFor="main-image-upload">Main Post Image (Optional)</FormLabel>
               <FormControl>
@@ -399,7 +432,7 @@ export default function NewPostPage() {
               )}
               {mainImagePreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={mainImagePreview} alt="Main image preview" width={192} height={192} objectFit="cover" className="rounded"/>
+                  <Image src={mainImagePreview} alt="Main image preview" width={192} height={192} style={{objectFit:"cover"}} className="rounded"/>
                 </div>
               )}
               <FormDescription>Upload a main image for the post (e.g., 800x600px). If you provide a URL below, this upload will be ignored.</FormDescription>
@@ -415,7 +448,7 @@ export default function NewPostPage() {
                         {...field} 
                         onChange={(e) => {
                           field.onChange(e);
-                           if (e.target.value) { setMainImageFile(null); setMainImagePreview(null); } // Clear file if URL is typed
+                           if (e.target.value) { setMainImageFile(null); setMainImagePreview(null); }
                         }}
                         disabled={!!mainImageFile}
                       />
@@ -427,16 +460,16 @@ export default function NewPostPage() {
             </FormItem>
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isUploading}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isUploading}>
-                {isUploading ? (
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm}>
+                {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Processing...
                   </>
-                ) : form.formState.isSubmitting ? 'Creating...' : 'Create Post'}
+                ) : 'Create Post'}
               </Button>
             </div>
           </form>
@@ -446,20 +479,4 @@ export default function NewPostPage() {
   );
 }
 
-// Minimal Loader2Icon component
-const Loader2Icon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-  </svg>
-);
+    

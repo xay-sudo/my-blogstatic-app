@@ -1,4 +1,5 @@
-import { getPostBySlug, getAllPosts } from '@/lib/mock-posts';
+
+import * as postService from '@/lib/post-service'; // Updated import
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
@@ -13,14 +14,15 @@ interface PostPageProps {
 }
 
 export async function generateStaticParams() {
-  const posts = await getAllPosts();
+  // This function now reads from the post service (which reads from JSON)
+  const posts = await postService.getAllPosts();
   return posts.map(post => ({
     slug: post.slug,
   }));
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
-  const post = await getPostBySlug(params.slug);
+  const post = await postService.getPostBySlug(params.slug);
   if (!post) {
     return {
       title: 'Post Not Found',
@@ -33,7 +35,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 }
 
 export default async function PostPage({ params }: PostPageProps) {
-  const post = await getPostBySlug(params.slug);
+  const post = await postService.getPostBySlug(params.slug);
 
   if (!post) {
     notFound();
@@ -62,8 +64,8 @@ export default async function PostPage({ params }: PostPageProps) {
             <Image
               src={post.imageUrl}
               alt={post.title}
-              layout="fill"
-              objectFit="cover"
+              fill // Use fill for responsive images with aspect ratio controlled by parent
+              style={{objectFit:"cover"}} // Use objectFit: "cover"
               priority
               data-ai-hint="article banner"
             />
@@ -76,7 +78,7 @@ export default async function PostPage({ params }: PostPageProps) {
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
 
-      {post.tags.length > 0 && (
+      {post.tags && post.tags.length > 0 && (
         <footer className="mt-12 pt-8 border-t">
           <h3 className="text-lg font-semibold mb-3 font-headline">Tags:</h3>
           <div className="flex flex-wrap gap-3">
@@ -87,7 +89,10 @@ export default async function PostPage({ params }: PostPageProps) {
         </footer>
       )}
 
-      <AISuggestTags postContent={post.content} currentTags={post.tags} />
+      {/* AISuggestTags can remain as a client component, postContent and currentTags are passed as props */}
+      <AISuggestTags postContent={post.content} currentTags={post.tags || []} />
     </article>
   );
 }
+
+    
