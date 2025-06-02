@@ -64,8 +64,13 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
     if (error.serverResponse) {
       console.error("Firebase Storage Server Response:", error.serverResponse);
     }
-    // Re-throw a more informative error
-    throw new Error(`Firebase Storage: ${error.message || 'An unknown error occurred during upload.'} (Code: ${error.code || 'unknown'}). Please check server logs and Firebase Storage rules.`);
+
+    const baseMessage = error.message || 'An unknown error occurred during upload.';
+    // Prevent "Firebase Storage: Firebase Storage:" duplication
+    const prefix = baseMessage.startsWith('Firebase Storage:') ? '' : 'Firebase Storage: ';
+    
+    const errorMessage = `${prefix}${baseMessage} (Code: ${error.code || 'unknown'}). Please check server logs and Firebase Storage rules.`;
+    throw new Error(errorMessage);
   }
 }
 
