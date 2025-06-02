@@ -39,7 +39,7 @@ export default function SearchBarClient({ initialSearchTerm = '' }: SearchBarCli
         placeholder="Search posts..."
         value={searchTerm}
         onChange={handleInputChange}
-        className="flex-grow"
+        className="flex-grow text-black dark:text-white placeholder:text-muted-foreground"
         aria-label="Search blog posts"
       />
       <Button type="submit" variant="primary" aria-label="Submit search">
