@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react'; // Added Save
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react';
 import { createPostAction } from '@/app/actions';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
@@ -484,7 +484,7 @@ export default function NewPostPage() {
             Import Content from URL
           </h3>
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-2 items-end">
+            <div className="flex flex-col sm:flex-row gap-2 items-start">
               <div className="flex-grow">
                 <Label htmlFor="scrape-url" className="text-sm font-medium">Content URL</Label>
                 <Input
@@ -496,12 +496,16 @@ export default function NewPostPage() {
                   disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}
                   className="mt-1"
                 />
+                 <FormDescription className="mt-1 text-xs">
+                  Enter a URL to attempt to scrape content. Works best with simple article pages. 
+                  Many sites have protections that may prevent successful scraping.
+                </FormDescription>
               </div>
               <Button 
                 type="button" 
                 onClick={handleFetchContentFromUrl} 
                 disabled={isScraping || isSubmittingForm || !scrapeUrl || isProcessingScrapedThumbnail}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto mt-1 sm:mt-[1.875rem]" 
               >
                 {isScraping ? (
                   <>
