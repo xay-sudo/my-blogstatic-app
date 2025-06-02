@@ -23,6 +23,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 as Loader2Icon, Save } from 'lucide-react';
 import { updateSiteSettingsAction } from '@/app/actions'; 
 import type { SiteSettings } from '@/types';
+import { getSettings as getDefaultSettingsObject } from '@/lib/settings-service'; // Import to get default structure/values if needed
+
+// Re-fetch default settings for client-side consistency if needed, or define them statically.
+// For simplicity, let's assume settings-service's DEFAULT_SETTINGS is what we want if props are incomplete.
+// However, initialSettings prop should already be complete due to getSettings() in parent.
+const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
+  siteTitle: "Newstoday", // Default if not provided by prop
+  siteDescription: "A modern blog platform with AI-powered tagging.",
+  postsPerPage: 6,
+};
+
 
 const siteSettingsFormSchema = z.object({
   siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100, {message: 'Site title must be 100 characters or less.'}),
@@ -47,19 +58,18 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
   const form = useForm<SiteSettingsFormValues>({
     resolver: zodResolver(siteSettingsFormSchema),
     defaultValues: {
-      siteTitle: initialSettings.siteTitle || '',
-      siteDescription: initialSettings.siteDescription || '',
-      postsPerPage: initialSettings.postsPerPage || 6,
+      siteTitle: initialSettings?.siteTitle || CLIENT_DEFAULT_SETTINGS.siteTitle,
+      siteDescription: initialSettings?.siteDescription || CLIENT_DEFAULT_SETTINGS.siteDescription,
+      postsPerPage: initialSettings?.postsPerPage || CLIENT_DEFAULT_SETTINGS.postsPerPage,
     },
     mode: 'onChange',
   });
   
-  // Reset form if initialSettings change (e.g. after a successful save and re-fetch)
   useEffect(() => {
     form.reset({
-      siteTitle: initialSettings.siteTitle || '',
-      siteDescription: initialSettings.siteDescription || '',
-      postsPerPage: initialSettings.postsPerPage || 6,
+      siteTitle: initialSettings?.siteTitle || CLIENT_DEFAULT_SETTINGS.siteTitle,
+      siteDescription: initialSettings?.siteDescription || CLIENT_DEFAULT_SETTINGS.siteDescription,
+      postsPerPage: initialSettings?.postsPerPage || CLIENT_DEFAULT_SETTINGS.postsPerPage,
     });
   }, [initialSettings, form]);
 
