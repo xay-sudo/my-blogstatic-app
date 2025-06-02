@@ -20,7 +20,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription as CardDescriptionShadCN, CardHeader, CardTitle } from '@/components/ui/card'; // Renamed CardDescription to avoid conflict
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react';
@@ -29,8 +29,8 @@ import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert'; 
-import { Label } from '@/components/ui/label'; 
+import { Alert, AlertDescription as AlertDescriptionShadCN } from '@/components/ui/alert'; // Renamed AlertDescription to avoid conflict
+import { Label } from '@/components/ui/label';
 
 const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
@@ -48,8 +48,8 @@ const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 interface ScrapedPostData {
   title?: string;
   content?: string;
-  thumbnailUrl?: string; 
-  thumbnailDataUri?: string; 
+  thumbnailUrl?: string;
+  thumbnailDataUri?: string;
   error?: string;
   details?: string;
 }
@@ -73,7 +73,7 @@ export default function NewPostPage() {
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null); 
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
@@ -83,7 +83,7 @@ export default function NewPostPage() {
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingError, setScrapingError] = useState<string | null>(null);
-  
+
   const [isProcessingScrapedThumbnail, setIsProcessingScrapedThumbnail] = useState(false);
 
 
@@ -115,18 +115,18 @@ export default function NewPostPage() {
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
+
       if (file.size > MAX_THUMBNAIL_SIZE_BYTES) {
         toast({
-          variant: "default", 
+          variant: "default",
           title: "Large File Selected",
           description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Consider optimizing it first. This warning is informational; the file will still be processed if you submit the form.`,
-          duration: 7000, 
+          duration: 7000,
         });
       }
-      
-      setThumbnailFile(file); 
-      
+
+      setThumbnailFile(file);
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setThumbnailPreview(reader.result as string);
@@ -135,7 +135,7 @@ export default function NewPostPage() {
     } else {
       setThumbnailFile(null);
       setThumbnailPreview(null);
-       if (e.target) { 
+       if (e.target) {
             e.target.value = '';
        }
     }
@@ -155,7 +155,7 @@ export default function NewPostPage() {
       const fileName = originalUrl ? originalUrl.substring(originalUrl.lastIndexOf('/') + 1) || 'scraped-thumbnail.png' : 'scraped-thumbnail.png';
       const mimeType = dataUri.substring(dataUri.indexOf(':') + 1, dataUri.indexOf(';'));
       let ext = mimeType.split('/')[1] || fileName.split('.').pop() || 'png';
-      if (ext.includes('jpeg')) ext = 'jpg'; 
+      if (ext.includes('jpeg')) ext = 'jpg';
       const finalFileName = `${fileName.split('.').slice(0, -1).join('.') || 'scraped-thumbnail'}-${Date.now()}.${ext}`;
 
       const file = await dataURIToFile(dataUri, finalFileName);
@@ -170,11 +170,11 @@ export default function NewPostPage() {
       }
 
       setThumbnailFile(file);
-      setThumbnailPreview(dataUri); 
-      
+      setThumbnailPreview(dataUri);
+
       const fileInput = document.getElementById('thumbnail-upload') as HTMLInputElement | null;
       if (fileInput) {
-          fileInput.value = ''; 
+          fileInput.value = '';
       }
 
       toast({ title: "Scraped Thumbnail Ready", description: "The found thumbnail has been prepared for upload. You can override it by selecting another file." });
@@ -204,7 +204,7 @@ export default function NewPostPage() {
       const currentTagsString = form.getValues('tags') || '';
       const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
       const newSuggestions = result.tags.filter(tag => !currentTagsArray.includes(tag.toLowerCase()));
-      
+
       if (newSuggestions.length > 0) {
         setSuggestedAiTags(Array.from(new Set(newSuggestions)));
         toast({ title: "AI Tags Suggested!", description: "Review the suggestions below."});
@@ -224,7 +224,7 @@ export default function NewPostPage() {
   const addAiTagToForm = (tagToAdd: string) => {
     const currentTagsString = form.getValues('tags') || '';
     const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-    
+
     const tagToAddLower = tagToAdd.toLowerCase();
     if (!currentTagsArray.includes(tagToAddLower)) {
       const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
@@ -245,11 +245,11 @@ export default function NewPostPage() {
     }
     setIsScraping(true);
     setScrapingError(null);
-    setThumbnailFile(null); 
-    setThumbnailPreview(null); 
+    setThumbnailFile(null);
+    setThumbnailPreview(null);
     setSuggestedAiTags([]);
     setAiTagsError(null);
-  
+
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
     try {
@@ -261,20 +261,20 @@ export default function NewPostPage() {
         body: JSON.stringify({ url: scrapeUrl }),
       });
 
-      let responseBodyText: string | null = null; 
+      let responseBodyText: string | null = null;
       let isJsonResponse = apiResponse.headers.get('content-type')?.includes('application/json');
 
       if (!apiResponse.ok) {
         let errorJson;
         let errorDesc = `Server returned status ${apiResponse.status}.`;
         try {
-          responseBodyText = await apiResponse.text(); 
+          responseBodyText = await apiResponse.text();
           if (isJsonResponse) {
             errorJson = JSON.parse(responseBodyText);
             const errorMsg = errorJson.error || 'Scraping failed.';
             const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
             errorDesc = `${errorMsg}${details}`;
-            if (errorJson.from === 'api-scrape') { 
+            if (errorJson.from === 'api-scrape') {
                  errorDesc += ' Please check the server logs for /api/scrape.';
             }
           } else {
@@ -291,11 +291,11 @@ export default function NewPostPage() {
 
       let scrapedData: ScrapedPostData;
       try {
-        responseBodyText = await apiResponse.text(); 
+        responseBodyText = await apiResponse.text();
         if (!isJsonResponse) {
           throw new Error("Response was not JSON.");
         }
-        scrapedData = JSON.parse(responseBodyText); 
+        scrapedData = JSON.parse(responseBodyText);
       } catch (jsonParseError: any) {
         console.error("Failed to parse JSON response from /api/scrape. Status: " + apiResponse.status + ". Response body:", responseBodyText);
         const errorDesc = `Could not understand the server's response (status ${apiResponse.status}). Expected JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
@@ -304,11 +304,11 @@ export default function NewPostPage() {
         setIsScraping(false);
         return;
       }
-      
+
       if (scrapedData.error) {
         let errorMsg = scrapedData.error;
         const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
-        if (scrapedData.error === 'internal' || (scrapedData as any).from === 'api-scrape') { 
+        if (scrapedData.error === 'internal' || (scrapedData as any).from === 'api-scrape') {
           errorMsg += ' Please check the server logs for /api/scrape.';
         }
         setScrapingError(`${errorMsg}${details}`);
@@ -316,7 +316,7 @@ export default function NewPostPage() {
         setIsScraping(false);
         return;
       }
-      
+
       let populatedTitle = 'Untitled Post';
       if (scrapedData.title) {
         form.setValue('title', scrapedData.title, { shouldValidate: true, shouldDirty: true });
@@ -337,20 +337,21 @@ export default function NewPostPage() {
           editorRef.current.setContent(defaultContent);
         }
       }
-      
+
       toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Review and adjust. AI tag suggestions will follow." });
-      
+
       await autoProcessScrapedThumbnail(scrapedData.thumbnailDataUri, scrapedData.thumbnailUrl);
 
-      if (scrapedData.content && scrapedData.content.trim().length >= 50) {
-        // Pass the HTML content to handleSuggestTags for plaintext extraction by the AI flow
-        await handleSuggestTags(editorRef.current ? editorRef.current.getContent({ format: 'text' }) : scrapedData.content);
+      // Use the content from the editor after it's been set, for plaintext extraction by AI
+      const contentForAiAfterScrape = editorRef.current ? editorRef.current.getContent({ format: 'text' }) : scrapedData.content;
+      if (contentForAiAfterScrape && contentForAiAfterScrape.trim().length >= 50) {
+        await handleSuggestTags(contentForAiAfterScrape);
       } else if (scrapedData.content) {
         setAiTagsError('Scraped content is too short (less than 50 characters) for effective AI tag suggestions.');
         setSuggestedAiTags([]);
       }
-  
-    } catch (error: any) { 
+
+    } catch (error: any) {
       console.error("Error calling /api/scrape:", error);
       const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again. If the problem persists, check server logs for /api/scrape.`;
       setScrapingError(fullErrorMessageForState);
@@ -363,7 +364,7 @@ export default function NewPostPage() {
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
-        
+
     const validationResult = await form.trigger();
     if (!validationResult) {
         toast({
@@ -376,7 +377,7 @@ export default function NewPostPage() {
     }
 
     let finalTags = data.tags ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0) : [];
-    
+
     const contentForAi = editorRef.current ? editorRef.current.getContent({format: 'text'}) : data.content;
 
     if (contentForAi && contentForAi.trim().length >= 50) {
@@ -400,7 +401,7 @@ export default function NewPostPage() {
         setIsSuggestingTags(false);
       }
     }
-    
+
     const formData = new FormData();
     formData.append('title', data.title);
     formData.append('slug', data.slug);
@@ -412,7 +413,7 @@ export default function NewPostPage() {
     }
 
     try {
-      const result = await createPostAction(formData); 
+      const result = await createPostAction(formData);
       if (result?.success === false) {
          toast({
           variant: "destructive",
@@ -436,7 +437,7 @@ export default function NewPostPage() {
         setThumbnailFile(null);
         setSuggestedAiTags([]); // Clear UI suggestions
         setAiTagsError(null);
-        setScrapeUrl(''); 
+        setScrapeUrl('');
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
@@ -475,7 +476,7 @@ export default function NewPostPage() {
             </Link>
           </Button>
         </div>
-        <CardDescription>Fill in the details below or import from a URL to publish a new blog post.</CardDescription>
+        <CardDescriptionShadCN>Fill in the details below or import from a URL to publish a new blog post.</CardDescriptionShadCN>
       </CardHeader>
       <CardContent>
         <div className="mb-8 p-4 border rounded-lg bg-muted/50">
@@ -496,16 +497,16 @@ export default function NewPostPage() {
                   disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}
                   className="mt-1"
                 />
-                 <FormDescription className="mt-1 text-xs">
-                  Enter a URL to attempt to scrape content. Works best with simple article pages. 
+                 <p className="text-sm text-muted-foreground mt-1 text-xs">
+                  Enter a URL to attempt to scrape content. Works best with simple article pages.
                   Many sites have protections that may prevent successful scraping.
-                </FormDescription>
+                </p>
               </div>
-              <Button 
-                type="button" 
-                onClick={handleFetchContentFromUrl} 
+              <Button
+                type="button"
+                onClick={handleFetchContentFromUrl}
                 disabled={isScraping || isSubmittingForm || !scrapeUrl || isProcessingScrapedThumbnail}
-                className="w-full sm:w-auto mt-1 sm:mt-[1.875rem]" 
+                className="w-full sm:w-auto mt-1 sm:mt-[1.875rem]"
               >
                 {isScraping ? (
                   <>
@@ -523,7 +524,7 @@ export default function NewPostPage() {
             {scrapingError && (
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{scrapingError}</AlertDescription>
+                <AlertDescriptionShadCN>{scrapingError}</AlertDescriptionShadCN>
               </Alert>
             )}
 
@@ -608,7 +609,7 @@ export default function NewPostPage() {
                 </FormItem>
               )}
             />
-            
+
             <FormItem>
               <FormLabel htmlFor="thumbnail-upload">Thumbnail Image</FormLabel>
               <FormControl>
@@ -632,7 +633,7 @@ export default function NewPostPage() {
                 </div>
               )}
               <FormDescription>
-                If content was imported, an attempt was made to use the scraped image. 
+                If content was imported, an attempt was made to use the scraped image.
                 You can override it by selecting a different file. Use optimized images (under {MAX_THUMBNAIL_SIZE_MB}MB).
               </FormDescription>
             </FormItem>
@@ -648,7 +649,7 @@ export default function NewPostPage() {
                       apiKey={tinymceApiKey || 'no-api-key'}
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
-                      value={field.value} 
+                      value={field.value}
                       onEditorChange={(content, _editor) => {
                         field.onChange(content);
                         form.trigger('content');
@@ -736,7 +737,7 @@ export default function NewPostPage() {
                 </FormItem>
               )}
             />
-            
+
             <div className="flex justify-end space-x-3 pt-4">
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
                 Cancel
@@ -761,5 +762,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
-    
