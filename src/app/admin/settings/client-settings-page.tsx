@@ -21,11 +21,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 as Loader2Icon, Save, Image as ImageIcon, Code, ShieldAlert, ShieldCheck, TerminalSquare, Heading1 } from 'lucide-react';
+import { Loader2 as Loader2Icon, Save, ShieldAlert, ShieldCheck, TerminalSquare, Heading1 } from 'lucide-react';
 import { updateSiteSettingsAction } from '@/app/actions'; 
 import type { SiteSettings } from '@/types';
 import { Switch } from '@/components/ui/switch';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,12 +34,6 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   siteTitle: "Newstoday",
   siteDescription: "A modern blog platform with AI-powered tagging.",
   postsPerPage: 6,
-  bannerEnabled: false,
-  bannerType: 'image',
-  bannerImageUrl: '',
-  bannerImageLink: '',
-  bannerImageAltText: 'Banner',
-  bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
   globalHeaderScriptsEnabled: false,
@@ -58,12 +51,6 @@ const siteSettingsFormSchema = z.object({
     .int({ message: 'Must be a whole number.'})
     .min(1, { message: 'Must display at least 1 post per page.' })
     .max(50, { message: 'Cannot display more than 50 posts per page.' }),
-  bannerEnabled: z.boolean().default(false),
-  bannerType: z.enum(['image', 'customHtml']).default('image'),
-  bannerImageUrl: z.string().url({ message: 'Please enter a valid URL for the banner image.' }).optional().or(z.literal('')),
-  bannerImageLink: z.string().url({ message: 'Please enter a valid URL for the banner link.' }).optional().or(z.literal('')),
-  bannerImageAltText: z.string().max(120, {message: 'Alt text should be 120 characters or less.'}).optional(),
-  bannerCustomHtml: z.string().optional(),
   adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
   globalHeaderScriptsEnabled: z.boolean().default(false),
@@ -71,25 +58,6 @@ const siteSettingsFormSchema = z.object({
   globalFooterScriptsEnabled: z.boolean().default(false),
   globalFooterScriptsCustomHtml: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.bannerEnabled && data.bannerType === 'image') {
-    if (!data.bannerImageUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Image URL is required when image banner is enabled.',
-        path: ['bannerImageUrl'],
-      });
-    }
-  }
-  if (data.bannerEnabled && data.bannerType === 'customHtml') {
-    if (!data.bannerCustomHtml || data.bannerCustomHtml.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Custom HTML is required when HTML banner is enabled.',
-        path: ['bannerCustomHtml'],
-      });
-    }
-  }
-  
   if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -159,12 +127,6 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       siteTitle: propsInitialSettings?.siteTitle || CLIENT_DEFAULT_SETTINGS.siteTitle,
       siteDescription: propsInitialSettings?.siteDescription || CLIENT_DEFAULT_SETTINGS.siteDescription,
       postsPerPage: propsInitialSettings?.postsPerPage || CLIENT_DEFAULT_SETTINGS.postsPerPage,
-      bannerEnabled: propsInitialSettings?.bannerEnabled || CLIENT_DEFAULT_SETTINGS.bannerEnabled,
-      bannerType: propsInitialSettings?.bannerType || CLIENT_DEFAULT_SETTINGS.bannerType,
-      bannerImageUrl: propsInitialSettings?.bannerImageUrl || CLIENT_DEFAULT_SETTINGS.bannerImageUrl,
-      bannerImageLink: propsInitialSettings?.bannerImageLink || CLIENT_DEFAULT_SETTINGS.bannerImageLink,
-      bannerImageAltText: propsInitialSettings?.bannerImageAltText || CLIENT_DEFAULT_SETTINGS.bannerImageAltText,
-      bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '', 
       globalHeaderScriptsEnabled: propsInitialSettings?.globalHeaderScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsEnabled,
@@ -181,12 +143,6 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       siteTitle: propsInitialSettings?.siteTitle || CLIENT_DEFAULT_SETTINGS.siteTitle,
       siteDescription: propsInitialSettings?.siteDescription || CLIENT_DEFAULT_SETTINGS.siteDescription,
       postsPerPage: propsInitialSettings?.postsPerPage || CLIENT_DEFAULT_SETTINGS.postsPerPage,
-      bannerEnabled: propsInitialSettings?.bannerEnabled || CLIENT_DEFAULT_SETTINGS.bannerEnabled,
-      bannerType: propsInitialSettings?.bannerType || CLIENT_DEFAULT_SETTINGS.bannerType,
-      bannerImageUrl: propsInitialSettings?.bannerImageUrl || CLIENT_DEFAULT_SETTINGS.bannerImageUrl,
-      bannerImageLink: propsInitialSettings?.bannerImageLink || CLIENT_DEFAULT_SETTINGS.bannerImageLink,
-      bannerImageAltText: propsInitialSettings?.bannerImageAltText || CLIENT_DEFAULT_SETTINGS.bannerImageAltText,
-      bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
       adminPassword: '',
       globalHeaderScriptsEnabled: propsInitialSettings?.globalHeaderScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalHeaderScriptsEnabled,
@@ -196,8 +152,6 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     });
   }, [propsInitialSettings, form]);
 
-  const watchedBannerType = form.watch('bannerType');
-  const watchedBannerEnabled = form.watch('bannerEnabled');
   const watchedAdminUsername = form.watch('adminUsername');
   const watchedAdminPassword = form.watch('adminPassword');
   const watchedGlobalHeaderScriptsEnabled = form.watch('globalHeaderScriptsEnabled');
@@ -205,8 +159,6 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
 
   const generalSettingFields: (keyof SiteSettingsFormValues)[] = [
     'siteTitle', 'siteDescription', 'postsPerPage', 
-    'bannerEnabled', 'bannerType', 'bannerImageUrl', 
-    'bannerImageLink', 'bannerImageAltText', 'bannerCustomHtml',
     'globalHeaderScriptsEnabled', 'globalHeaderScriptsCustomHtml',
     'globalFooterScriptsEnabled', 'globalFooterScriptsCustomHtml',
   ];
@@ -225,12 +177,6 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('siteTitle', data.siteTitle);
     formData.append('siteDescription', data.siteDescription);
     formData.append('postsPerPage', String(data.postsPerPage));
-    formData.append('bannerEnabled', data.bannerEnabled ? 'on' : 'off');
-    formData.append('bannerType', data.bannerType || 'image');
-    formData.append('bannerImageUrl', data.bannerImageUrl || '');
-    formData.append('bannerImageLink', data.bannerImageLink || '');
-    formData.append('bannerImageAltText', data.bannerImageAltText || '');
-    formData.append('bannerCustomHtml', data.bannerCustomHtml || '');
     formData.append('adminUsername', data.adminUsername || '');
     formData.append('globalHeaderScriptsEnabled', data.globalHeaderScriptsEnabled ? 'on' : 'off');
     formData.append('globalHeaderScriptsCustomHtml', data.globalHeaderScriptsCustomHtml || '');
@@ -323,7 +269,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
             <Tabs defaultValue="general">
               <TabsList className="grid w-full grid-cols-3 mb-6">
                 <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="ads_scripts">Ads & Scripts</TabsTrigger>
+                <TabsTrigger value="scripts">Scripts</TabsTrigger>
                 <TabsTrigger value="admin_access">Admin Access</TabsTrigger>
               </TabsList>
 
@@ -371,7 +317,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                   )}
                 />
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled}>
+                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled || isAdminSettingsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
@@ -381,71 +327,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                 </div>
               </TabsContent>
               
-              <TabsContent value="ads_scripts" className="space-y-8">
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Header Ad Slot (e.g., 728x90)</h3>
-                  <FormField
-                    control={form.control}
-                    name="bannerEnabled"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5">
-                          <FormLabel>Enable Header Ad Slot</FormLabel>
-                          <FormDescription>Show an ad slot in the site header.</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  {watchedBannerEnabled && (
-                    <div className="mt-6 space-y-6 pl-2 border-l-2 border-primary/50 ml-1">
-                      <FormField
-                        control={form.control}
-                        name="bannerType"
-                        render={({ field }) => (
-                          <FormItem className="space-y-3">
-                            <FormLabel>Ad Slot Type</FormLabel>
-                            <FormControl>
-                              <RadioGroup
-                                onValueChange={field.onChange}
-                                defaultValue={field.value}
-                                className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4"
-                                disabled={isSubmitting}
-                              >
-                                <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl><RadioGroupItem value="image" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center"><ImageIcon className="w-4 h-4 mr-2" /> Image Banner</FormLabel>
-                                </FormItem>
-                                <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl><RadioGroupItem value="customHtml" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center"><Code className="w-4 h-4 mr-2" /> Custom HTML/Script</FormLabel>
-                                </FormItem>
-                              </RadioGroup>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {watchedBannerType === 'image' && (
-                        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
-                          <FormField control={form.control} name="bannerImageUrl" render={({ field }) => (<FormItem><FormLabel>Image URL</FormLabel><FormControl><Input type="url" placeholder="https://example.com/ad-image.jpg" {...field} disabled={isSubmitting} /></FormControl><FormDescription>Direct URL to the ad image.</FormDescription><FormMessage /></FormItem>)} />
-                          <FormField control={form.control} name="bannerImageLink" render={({ field }) => (<FormItem><FormLabel>Image Link URL (Optional)</FormLabel><FormControl><Input type="url" placeholder="https://advertiser.com/product" {...field} disabled={isSubmitting} /></FormControl><FormDescription>Where the ad links.</FormDescription><FormMessage /></FormItem>)} />
-                          <FormField control={form.control} name="bannerImageAltText" render={({ field }) => (<FormItem><FormLabel>Image Alt Text</FormLabel><FormControl><Input placeholder="Descriptive alt text" {...field} disabled={isSubmitting} /></FormControl><FormDescription>Important for accessibility.</FormDescription><FormMessage /></FormItem>)} />
-                        </div>
-                      )}
-                      {watchedBannerType === 'customHtml' && (
-                        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
-                          <FormField control={form.control} name="bannerCustomHtml" render={({ field }) => (<FormItem><FormLabel>Custom HTML Code</FormLabel><FormControl><Textarea placeholder="&lt;div&gt;Your ad script...&lt;/div&gt;" {...field} rows={6} disabled={isSubmitting} /></FormControl><FormDescription>Paste your ad code. Ensure it's valid.</FormDescription><FormMessage /></FormItem>)} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-                
+              <TabsContent value="scripts" className="space-y-8">
                 <div>
                   <h3 className="text-lg font-medium mb-4 flex items-center">
                     <Heading1 className="w-5 h-5 mr-2 text-primary" />
@@ -548,11 +430,11 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
 
 
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled}>
+                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled || isAdminSettingsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
-                      <><Save className="w-4 h-4 mr-2" />Save Ads & Scripts Settings</>
+                      <><Save className="w-4 h-4 mr-2" />Save Scripts Settings</>
                     )}
                   </Button>
                 </div>
@@ -617,7 +499,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                   )}
                 </div>
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isAdminSaveDisabled}>
+                  <Button type="submit" variant="primary" disabled={isAdminSaveDisabled || isGeneralSettingsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
@@ -633,4 +515,3 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     </Card>
   );
 }
-

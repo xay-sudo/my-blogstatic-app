@@ -13,12 +13,6 @@ const DEFAULT_SETTINGS_OBJ: SiteSettings = {
   siteTitle: "Newstoday",
   siteDescription: "A modern blog platform with AI-powered tagging.",
   postsPerPage: 6,
-  bannerEnabled: false,
-  bannerType: 'image',
-  bannerImageUrl: '',
-  bannerImageLink: '',
-  bannerImageAltText: 'Banner',
-  bannerCustomHtml: '',
   adminUsername: '',
   adminPassword: '',
   globalHeaderScriptsEnabled: false,
@@ -212,11 +206,6 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   if (isNaN(mergedSettings.postsPerPage) || mergedSettings.postsPerPage <= 0) {
     mergedSettings.postsPerPage = DEFAULT_SETTINGS_OBJ.postsPerPage;
   }
-  if (typeof mergedSettings.bannerEnabled === 'string') {
-    mergedSettings.bannerEnabled = mergedSettings.bannerEnabled === 'on' || mergedSettings.bannerEnabled === 'true';
-  } else if (typeof mergedSettings.bannerEnabled === 'undefined') {
-    mergedSettings.bannerEnabled = false;
-  }
 
   if (newSettings.hasOwnProperty('adminUsername')) {
     mergedSettings.adminUsername = String(newSettings.adminUsername ?? '').trim();
@@ -265,4 +254,3 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
 if (typeof window === 'undefined') {
  // Defer actual seeding to first function call.
 }
-

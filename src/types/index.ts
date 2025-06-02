@@ -14,13 +14,6 @@ export interface SiteSettings {
   siteTitle: string;
   siteDescription: string;
   postsPerPage: number;
-  // Banner settings
-  bannerEnabled?: boolean;
-  bannerType?: 'image' | 'customHtml';
-  bannerImageUrl?: string;
-  bannerImageLink?: string;
-  bannerImageAltText?: string;
-  bannerCustomHtml?: string;
   // Local Admin Auth
   adminUsername?: string;
   adminPassword?: string; // WARNING: Stored in plaintext for local demo only. NOT SECURE.
@@ -31,4 +24,3 @@ export interface SiteSettings {
   globalFooterScriptsEnabled?: boolean;
   globalFooterScriptsCustomHtml?: string;
 }
-

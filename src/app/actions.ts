@@ -323,12 +323,6 @@ const siteSettingsSchema = z.object({
   siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100),
   siteDescription: z.string().min(10, { message: 'Site description must be at least 10 characters long.' }).max(300),
   postsPerPage: z.coerce.number().int().min(1, { message: 'Must display at least 1 post per page.' }).max(50, { message: 'Cannot display more than 50 posts per page.' }),
-  bannerEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
-  bannerType: z.enum(['image', 'customHtml']).optional().default('image'),
-  bannerImageUrl: z.string().url({ message: 'Please enter a valid URL for the banner image.' }).optional().or(z.literal('')),
-  bannerImageLink: z.string().url({ message: 'Please enter a valid URL for the banner link.' }).optional().or(z.literal('')),
-  bannerImageAltText: z.string().max(120, {message: 'Alt text should be 120 characters or less.'}).optional(),
-  bannerCustomHtml: z.string().optional(),
   adminUsername: z.string().max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().max(100, {message: "Admin password must be 100 characters or less."}).optional(),
   globalHeaderScriptsEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
@@ -336,24 +330,6 @@ const siteSettingsSchema = z.object({
   globalFooterScriptsEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
   globalFooterScriptsCustomHtml: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.bannerEnabled && data.bannerType === 'image') {
-    if (!data.bannerImageUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Image URL is required when image banner is enabled.',
-        path: ['bannerImageUrl'],
-      });
-    }
-  }
-  if (data.bannerEnabled && data.bannerType === 'customHtml') {
-    if (!data.bannerCustomHtml || data.bannerCustomHtml.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Custom HTML for banner is required when HTML banner is enabled.',
-        path: ['bannerCustomHtml'],
-      });
-    }
-  }
   if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -376,12 +352,6 @@ export async function updateSiteSettingsAction(formData: FormData) {
     siteTitle: formData.get('siteTitle'),
     siteDescription: formData.get('siteDescription'),
     postsPerPage: formData.get('postsPerPage'),
-    bannerEnabled: formData.get('bannerEnabled'),
-    bannerType: formData.get('bannerType'),
-    bannerImageUrl: formData.get('bannerImageUrl'),
-    bannerImageLink: formData.get('bannerImageLink'),
-    bannerImageAltText: formData.get('bannerImageAltText'),
-    bannerCustomHtml: formData.get('bannerCustomHtml'),
     adminUsername: formData.get('adminUsername'),
     adminPassword: formData.get('adminPassword'),
     globalHeaderScriptsEnabled: formData.get('globalHeaderScriptsEnabled'),
@@ -444,12 +414,6 @@ export async function updateSiteSettingsAction(formData: FormData) {
       siteTitle: validation.data.siteTitle,
       siteDescription: validation.data.siteDescription,
       postsPerPage: validation.data.postsPerPage,
-      bannerEnabled: validation.data.bannerEnabled,
-      bannerType: validation.data.bannerType,
-      bannerImageUrl: validation.data.bannerImageUrl,
-      bannerImageLink: validation.data.bannerImageLink,
-      bannerImageAltText: validation.data.bannerImageAltText,
-      bannerCustomHtml: validation.data.bannerCustomHtml,
       adminUsername: formUsername,
       globalHeaderScriptsEnabled: validation.data.globalHeaderScriptsEnabled,
       globalHeaderScriptsCustomHtml: validation.data.globalHeaderScriptsCustomHtml,
@@ -532,4 +496,3 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
-

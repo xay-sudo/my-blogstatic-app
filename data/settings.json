@@ -1,13 +1,12 @@
+
 {
   "siteTitle": "Newstoday",
   "siteDescription": "A modern blog platform with AI-powered tagging and content scraping.",
   "postsPerPage": 18,
-  "bannerEnabled": true,
-  "bannerType": "customHtml",
-  "bannerImageUrl": "https://placehold.co/728x90.png?text=Your+Custom+Banner+Here",
-  "bannerImageLink": "https://example.com",
-  "bannerImageAltText": "Promotional Banner",
-  "bannerCustomHtml": "<script type=\"text/javascript\">\r\n\tatOptions = {\r\n\t\t'key' : 'fff490176317327192fad7d937b02c1b',\r\n\t\t'format' : 'iframe',\r\n\t\t'height' : 90,\r\n\t\t'width' : 728,\r\n\t\t'params' : {}\r\n\t};\r\n</script>\r\n<script type=\"text/javascript\" src=\"//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js\"></script>",
   "adminUsername": "vanchhaydok@gmail.com",
-  "adminPassword": "Dell123"
+  "adminPassword": "Dell123",
+  "globalHeaderScriptsEnabled": false,
+  "globalHeaderScriptsCustomHtml": "",
+  "globalFooterScriptsEnabled": false,
+  "globalFooterScriptsCustomHtml": ""
 }
