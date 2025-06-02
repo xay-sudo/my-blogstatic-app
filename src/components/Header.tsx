@@ -5,7 +5,8 @@ import Link from 'next/link';
 import type { SiteSettings } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { Suspense, useCallback } from 'react'; 
+import React, { Suspense } from 'react'; // Removed useCallback as it's not used
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -34,11 +35,6 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             {siteSettings?.siteTitle || 'News Today'}
           </Link>
-
-
-          {/* Ad slot removejjd */}
-    
-
         </div>
        
       </header>
@@ -50,12 +46,14 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-6">
             {/* Future nav links can go here */}
-          
           </div>
-          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md ml-auto">
-            <Suspense fallback={<SearchBarFallback />}>
-              <SearchBarClient />
-            </Suspense>
+          <div className="flex items-center space-x-2"> {/* Container for search and toggle */}
+            <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
+              <Suspense fallback={<SearchBarFallback />}>
+                <SearchBarClient />
+              </Suspense>
+            </div>
+            <ThemeToggle /> {/* Theme toggle button */}
           </div>
         </div>
      

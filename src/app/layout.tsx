@@ -7,7 +7,8 @@ import { getSettings } from '@/lib/settings-service';
 import type { SiteSettings } from '@/types';
 import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
-import HeadScriptInjector from '@/components/HeadScriptInjector'; 
+import HeadScriptInjector from '@/components/HeadScriptInjector';
+import { ThemeProvider } from '@/contexts/ThemeProvider';
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -29,8 +30,11 @@ export default async function RootLayout({
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const isAdminLoggedIn = !!sessionCookie && sessionCookie.value === 'true';
 
+  // The <html> tag will not have 'dark' class set here initially.
+  // ThemeProvider's useEffect will handle adding it client-side.
+  // suppressHydrationWarning is important here for the class attribute.
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -40,19 +44,21 @@ export default async function RootLayout({
         )}
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col bg-background text-foreground">
-        <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
-        <main className="flex-grow container mx-auto px-4 py-8">
-          {children}
-        </main>
-        <Toaster />
-        <footer className="py-6 text-center text-muted-foreground text-sm">
-          <p>&copy; {new Date().getFullYear()} {settings.siteTitle || 'Blogstatic'}. All rights reserved.</p>
-        </footer>
-        {settings.globalFooterScriptsEnabled && settings.globalFooterScriptsCustomHtml && (
-          <RenderHtmlContent
-            htmlString={settings.globalFooterScriptsCustomHtml}
-          />
-        )}
+        <ThemeProvider storageKey="newstoday-theme" defaultTheme="light">
+          <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
+          <main className="flex-grow container mx-auto px-4 py-8">
+            {children}
+          </main>
+          <Toaster />
+          <footer className="py-6 text-center text-muted-foreground text-sm">
+            <p>&copy; {new Date().getFullYear()} {settings.siteTitle || 'Blogstatic'}. All rights reserved.</p>
+          </footer>
+          {settings.globalFooterScriptsEnabled && settings.globalFooterScriptsCustomHtml && (
+            <RenderHtmlContent
+              htmlString={settings.globalFooterScriptsCustomHtml}
+            />
+          )}
+        </ThemeProvider>
       </body>
     </html>
   );

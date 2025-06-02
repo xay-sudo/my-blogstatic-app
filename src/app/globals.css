@@ -62,19 +62,19 @@ body {
     --border: 222 15% 28%; /* Visible but not harsh border */
     --input: 222 15% 28%; /* Input fields background, same as border */
     --ring: 210 80% 55%; /* Focus ring, slightly darker primary */
-    --chart-1: 210 70% 50%; /* Adjusted chart colors for dark mode */
+    --chart-1: 210 70% 50%; 
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 222 20% 8%; /* Even darker than main background for separation */
+    --sidebar-background: 222 20% 8%; 
     --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 210 80% 60%; /* Consistent with main primary */
-    --sidebar-primary-foreground: 222 20% 10%; /* Consistent */
-    --sidebar-accent: 222 15% 20%; /* Subtle accent for hover, etc. */
+    --sidebar-primary: 210 80% 60%; 
+    --sidebar-primary-foreground: 222 20% 10%; 
+    --sidebar-accent: 222 15% 20%; 
     --sidebar-accent-foreground: 210 20% 95%;
     --sidebar-border: 222 15% 22%;
-    --sidebar-ring: 210 80% 55%; /* Consistent with main ring */
+    --sidebar-ring: 210 80% 55%; 
   }
 }
 
