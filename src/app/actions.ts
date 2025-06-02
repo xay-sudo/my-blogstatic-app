@@ -54,32 +54,36 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
   } catch (error: any) {
-    console.error("Firebase Storage Upload Error:", error);
-    console.error("Firebase Storage Server Response (if available):", error.serverResponse); // Log full server response
-    
+    console.error("Firebase Storage Upload Error:", error); // Full error object
+    console.error("Firebase Storage Server Response (if available):", error.serverResponse); // Specific server response
+
     let errorMessage = "Could not upload file to Firebase Storage.";
     if (error.code) {
-      // Use the error message from Firebase if available, otherwise use a generic one for the code
       let baseMessage = error.message || `An unknown error occurred. Code: ${error.code}`;
+      // Avoid "Firebase Storage: Firebase Storage:"
+      if (baseMessage.startsWith("Firebase Storage: ")) {
+        baseMessage = baseMessage.substring("Firebase Storage: ".length);
+      }
       errorMessage = `Firebase Storage: ${baseMessage}`;
       
       if (error.code === 'storage/unknown') {
-        errorMessage += " This often indicates a Firebase project configuration issue. Please check: 1. Storage Security Rules in Firebase Console (allow writes to the 'thumbnails/' path for authenticated users). 2. Cloud Storage API is enabled in Google Cloud Console for your project. 3. The 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET' environment variable is correct. 4. Your Firebase project's billing status and quotas. Detailed server logs (Vercel logs) for 'Firebase Storage Server Response' may provide more specific clues.";
+        errorMessage += "\nThis often indicates a Firebase project configuration issue. Please check:\n" +
+                        "1. Storage Security Rules in Firebase Console (allow writes to 'thumbnails/' for authenticated users).\n" +
+                        "2. Cloud Storage API is enabled in Google Cloud Console for your project.\n" +
+                        "3. 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET' environment variable is correct.\n" +
+                        "4. Firebase project's billing status and quotas.\n" +
+                        "➡️ Detailed server logs (Vercel logs) for 'Firebase Storage Server Response' may provide more specific clues.";
       } else if (error.code === 'storage/unauthorized') {
-        errorMessage += " Check your Firebase Storage security rules. You might not have permission to write to the specified location.";
+        errorMessage += "\nCheck your Firebase Storage security rules. You might not have permission to write to the specified location.";
       } else if (error.code === 'storage/object-not-found') {
-        errorMessage += " The file path in Storage might be incorrect or the object doesn't exist (should not happen for uploads).";
+        errorMessage += "\nThe file path in Storage might be incorrect or the object doesn't exist (should not happen for uploads).";
       } else if (error.code === 'storage/quota-exceeded') {
-        errorMessage += " You have exceeded your Firebase Storage quota. Please check your plan and usage.";
+        errorMessage += "\nYou have exceeded your Firebase Storage quota. Please check your plan and usage.";
       }
     } else if (error.message) {
       errorMessage = `Firebase Storage: ${error.message}`;
     }
-
-    // Avoid "Firebase Storage: Firebase Storage:"
-    if (errorMessage.startsWith("Firebase Storage: Firebase Storage: ")) {
-      errorMessage = errorMessage.substring("Firebase Storage: ".length);
-    }
+    
     throw new Error(errorMessage);
   }
 }
