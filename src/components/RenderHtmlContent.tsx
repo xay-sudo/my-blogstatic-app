@@ -1,45 +1,63 @@
-
 'use client';
 
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface RenderHtmlContentProps {
   /**
    * The HTML string to be rendered.
    */
   htmlString: string;
-  /**
-   * Optional CSS classes to apply to the wrapper div that will contain the HTML.
-   */
-  className?: string;
 }
 
 /**
- * A component to safely render an HTML string, deferring actual content rendering
- * to client-side to avoid hydration mismatches.
+ * A client component that injects a raw HTML string directly into the document's <body>.
+ * It renders null itself to avoid interfering with SSR/hydration,
+ * then appends the parsed HTML content via useEffect on the client-side.
+ * It also handles cleanup of the injected elements.
  */
-const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString, className = "" }) => {
-  const [isMounted, setIsMounted] = useState(false);
+const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString }) => {
+  const injectedNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    // Clear previously injected nodes
+    injectedNodesRef.current.forEach(node => {
+      if (node.parentNode === document.body) {
+        document.body.removeChild(node);
+      }
+    });
+    injectedNodesRef.current = [];
 
-  if (!isMounted || !htmlString) {
-    // If not mounted yet, or if there's no HTML string, render nothing.
-    // This prevents a <div> placeholder from appearing in the <head> or an empty div elsewhere.
-    return null;
-  }
+    if (htmlString && typeof window !== 'undefined' && document.body) {
+      const tempContainer = document.createElement('div');
+      tempContainer.innerHTML = htmlString;
 
-  // Only render with dangerouslySetInnerHTML on the client after mounting AND if htmlString is present.
-  // The div wrapper is used here to apply any className and to host the dangerouslySetInnerHTML.
-  return (
-    <div
-      className={className}
-      dangerouslySetInnerHTML={{ __html: htmlString }}
-    />
-  );
+      const fragment = document.createDocumentFragment();
+      const newNodes: Node[] = [];
+      while (tempContainer.firstChild) {
+        const node = tempContainer.firstChild;
+        fragment.appendChild(node);
+        newNodes.push(node);
+      }
+
+      if (fragment.childNodes.length > 0) {
+        document.body.appendChild(fragment);
+        injectedNodesRef.current = newNodes;
+      }
+    }
+
+    // Cleanup function for when the component unmounts or htmlString changes
+    return () => {
+      injectedNodesRef.current.forEach(node => {
+        if (node.parentNode === document.body) {
+          document.body.removeChild(node);
+        }
+      });
+      injectedNodesRef.current = [];
+    };
+  }, [htmlString]); // Re-run if htmlString changes
+
+  return null; // This component renders nothing itself into the React tree
 };
 
 export default RenderHtmlContent;

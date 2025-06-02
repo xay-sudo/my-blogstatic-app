@@ -7,12 +7,12 @@ import { getSettings } from '@/lib/settings-service';
 import type { SiteSettings } from '@/types';
 import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
-import HeadScriptInjector from '@/components/HeadScriptInjector'; // Import the new component
+import HeadScriptInjector from '@/components/HeadScriptInjector'; 
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
   return {
-    title: settings.siteTitle || 'Newstoday',
+    title: settings.siteTitle || 'Blogstatic',
     description: settings.siteDescription || 'A modern blog platform with AI-powered tagging.',
   };
 }
@@ -34,24 +34,23 @@ export default async function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,200..900;1,7..72,200..900&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet" />
         {settings.globalHeaderScriptsEnabled && settings.globalHeaderScriptsCustomHtml && (
           <HeadScriptInjector htmlString={settings.globalHeaderScriptsCustomHtml} />
         )}
       </head>
-      <body className="font-body antialiased min-h-screen flex flex-col">
+      <body className="font-body antialiased min-h-screen flex flex-col bg-background text-foreground">
         <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
         </main>
         <Toaster />
-        <footer className="py-6 text-center text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Newstoday. All rights reserved.</p>
+        <footer className="py-6 text-center text-muted-foreground text-sm">
+          <p>&copy; {new Date().getFullYear()} {settings.siteTitle || 'Blogstatic'}. All rights reserved.</p>
         </footer>
         {settings.globalFooterScriptsEnabled && settings.globalFooterScriptsCustomHtml && (
           <RenderHtmlContent
             htmlString={settings.globalFooterScriptsCustomHtml}
-            // No specific className or placeholderStyle needed for invisible footer scripts by default
           />
         )}
       </body>
