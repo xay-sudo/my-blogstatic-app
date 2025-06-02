@@ -1,7 +1,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio'; // Changed this line
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     });
 
     const html = response.data;
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(html); // This will now work correctly
 
     // Extract title - common patterns
     const title = 

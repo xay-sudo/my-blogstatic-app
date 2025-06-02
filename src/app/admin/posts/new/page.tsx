@@ -181,7 +181,7 @@ export default function NewPostPage() {
     setIsScraping(true);
     setScrapingError(null);
     setThumbnailFile(null); 
-    setThumbnailPreview(null); // Clear previous preview
+    setThumbnailPreview(null); 
   
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
@@ -194,13 +194,47 @@ export default function NewPostPage() {
         body: JSON.stringify({ url: scrapeUrl }),
       });
 
-      const scrapedData: ScrapedPostData = await response.json();
+      let responseBodyText: string | null = null; 
 
-      if (!response.ok || scrapedData.error) {
-        const errorMsg = scrapedData.error || `Failed to scrape. Status: ${response.status}`;
-        const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
+      if (!response.ok) {
+        let errorJson;
+        try {
+          responseBodyText = await response.text(); 
+          errorJson = JSON.parse(responseBodyText);
+        } catch (e) {
+          const errorDesc = `Server returned status ${response.status}. The response was not valid JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
+          setScrapingError(errorDesc);
+          toast({ variant: "destructive", title: "Scraping Error", description: errorDesc, duration: 10000 });
+          setIsScraping(false);
+          return;
+        }
+        
+        const errorMsg = errorJson.error || `Scraping failed with status ${response.status}`;
+        const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
         setScrapingError(`${errorMsg}${details}`);
         toast({ variant: "destructive", title: "Scraping Error", description: `${errorMsg}${details}`, duration: 8000 });
+        setIsScraping(false);
+        return;
+      }
+
+      let scrapedData: ScrapedPostData;
+      try {
+        responseBodyText = await response.text(); 
+        scrapedData = JSON.parse(responseBodyText); 
+      } catch (jsonParseError: any) {
+        console.error("Failed to parse JSON response from /api/scrape. Status: " + response.status + ". Response body:", responseBodyText);
+        const errorDesc = `Could not understand the server's response (status ${response.status}). Expected JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
+        setScrapingError(errorDesc);
+        toast({ variant: "destructive", title: "Scraping Error", description: errorDesc, duration: 10000 });
+        setIsScraping(false);
+        return;
+      }
+      
+      if (scrapedData.error) {
+        const errorMsg = scrapedData.error;
+        const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
+        setScrapingError(`${errorMsg}${details}`);
+        toast({ variant: "destructive", title: "Scraping Error From API", description: `${errorMsg}${details}`, duration: 8000 });
         setIsScraping(false);
         return;
       }
@@ -240,11 +274,11 @@ export default function NewPostPage() {
   
       toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
 
-    } catch (error: any) {
+    } catch (error: any) { // Catches network errors or other issues with fetch() itself
       console.error("Error calling /api/scrape:", error);
-      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error'}. Please check the URL or try again. If the problem persists, check server logs.`;
+      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again.`;
       setScrapingError(fullErrorMessageForState);
-      toast({ variant: "destructive", title: "Scraping Error", description: error.message || "An unknown error occurred while trying to fetch content.", duration: 8000 });
+      toast({ variant: "destructive", title: "Network or Fetch Error", description: error.message || "An unknown error occurred while trying to fetch content.", duration: 8000 });
     } finally {
       setIsScraping(false);
     }
@@ -619,3 +653,4 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
