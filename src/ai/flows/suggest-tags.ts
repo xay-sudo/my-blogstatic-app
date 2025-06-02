@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -49,8 +50,25 @@ const suggestTagsFlow = ai.defineFlow(
     inputSchema: SuggestTagsInputSchema,
     outputSchema: SuggestTagsOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+  async (input): Promise<SuggestTagsOutput> => {
+    const response = await prompt(input); // Get the whole response object
+
+    if (response.output) {
+      return response.output; // If structured output exists, return it
+    } else {
+      // Log a warning if structured output is missing and provide the raw text for debugging
+      // Truncate blogPostContent in log to avoid overly long log messages.
+      const contentPreview = input.blogPostContent.length > 200
+        ? input.blogPostContent.substring(0, 200) + '...'
+        : input.blogPostContent;
+      
+      console.warn(
+        `[${new Date().toISOString()}] AI prompt 'suggestTagsPrompt' did not return structured output. ` +
+        `Input content preview: "${contentPreview}". Raw text response from LLM: "${response.text}". ` +
+        `Falling back to empty tags array.`
+      );
+      // Fallback to returning an empty tags array, which conforms to SuggestTagsOutputSchema
+      return { tags: [] };
+    }
   }
 );
