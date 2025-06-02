@@ -5,8 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import Image from 'next/image';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,9 +22,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { storage } from '@/lib/firebase-config'; 
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { useAuth } from '@/contexts/AuthContext';
+
 
 const postFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
@@ -37,8 +43,8 @@ const postFormSchema = z.object({
     })
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
-  imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
-  thumbnailUrl: z.string().url({ message: 'Please enter a valid URL for the thumbnail.' }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: 'Please enter a valid URL or upload an image.' }).optional().or(z.literal('')),
+  thumbnailUrl: z.string().url({ message: 'Please enter a valid URL or upload a thumbnail.' }).optional().or(z.literal('')),
 });
 
 type PostFormValues = z.infer<typeof postFormSchema>;
@@ -46,8 +52,17 @@ type PostFormValues = z.infer<typeof postFormSchema>;
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { user } = useAuth();
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
+
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [mainImageFile, setMainImageFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [isUploading, setIsUploading] = useState(false);
+
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postFormSchema),
@@ -77,13 +92,117 @@ export default function NewPostPage() {
     }
   }, [watchedTitle, form]);
 
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>,
+    urlField: keyof PostFormValues
+  ) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      form.setValue(urlField, ''); // Clear any manually entered URL, it will be set after upload
+      form.clearErrors(urlField); // Clear potential URL validation errors
+    } else {
+      setFile(null);
+      setPreview(null);
+    }
+  };
 
-  const onSubmit = (data: PostFormValues) => {
-    const finalTags = Array.isArray(data.tags) ? data.tags :
-                      (typeof data.tags === 'string' ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []);
+  const uploadFile = async (file: File, path: string, progressKey: string): Promise<string> => {
+    if (!storage) {
+      toast({ variant: "destructive", title: "Error", description: "Firebase Storage is not configured. Check console and .env.local file." });
+      throw new Error("Firebase Storage not configured.");
+    }
+    if (!user) {
+      toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to upload files." });
+      throw new Error("User not authenticated for upload.");
+    }
+
+    const timestamp = new Date().getTime();
+    const uniqueFileName = `${timestamp}_${file.name.replace(/\s+/g, '_')}`;
+    // Path structure: posts_images/thumbnails_or_main/userId/filename
+    const storageRef = ref(storage, `${path}/${user.uid}/${uniqueFileName}`);
+    
+    return new Promise((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(prev => ({ ...prev, [progressKey]: progress }));
+        },
+        (error) => {
+          console.error(`Upload error for ${progressKey}:`, error);
+          toast({ variant: "destructive", title: `Upload Failed: ${progressKey}`, description: error.message });
+          setUploadProgress(prev => ({ ...prev, [progressKey]: 0 }));
+          reject(error);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            setUploadProgress(prev => ({ ...prev, [progressKey]: 100 }));
+            resolve(downloadURL);
+          } catch (error) {
+             console.error(`Failed to get download URL for ${progressKey}:`, error);
+             toast({ variant: "destructive", title: `Upload Error: ${progressKey}`, description: "Could not get download URL."});
+             reject(error);
+          }
+        }
+      );
+    });
+  };
+
+
+  const onSubmit = async (data: PostFormValues) => {
+    setIsUploading(true);
+    let submittedData = { ...data }; // Work with a copy
+
+    try {
+      if (thumbnailFile) {
+        toast({ title: "Uploading Thumbnail...", description: "Please wait." });
+        const uploadedThumbnailUrl = await uploadFile(thumbnailFile, 'posts_images/thumbnails', 'thumbnail');
+        submittedData.thumbnailUrl = uploadedThumbnailUrl;
+        form.setValue('thumbnailUrl', uploadedThumbnailUrl, {shouldValidate: true}); 
+      }
+      if (mainImageFile) {
+         toast({ title: "Uploading Main Image...", description: "Please wait." });
+        const uploadedImageUrl = await uploadFile(mainImageFile, 'posts_images/main', 'mainImage');
+        submittedData.imageUrl = uploadedImageUrl;
+        form.setValue('imageUrl', uploadedImageUrl, {shouldValidate: true});
+      }
+    } catch (error) {
+      setIsUploading(false);
+      setUploadProgress({});
+      // Error toast is handled within uploadFile
+      return;
+    }
+    
+    // Re-validate the entire form data now that URLs are potentially set
+    const validationResult = await form.trigger();
+    if (!validationResult) {
+      toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: "Please check the form for errors after image processing.",
+      });
+      setIsUploading(false);
+      return;
+    }
+
+    // Get the latest values which include uploaded URLs
+    const finalData = form.getValues();
+
+    const finalTags = Array.isArray(finalData.tags) ? finalData.tags :
+                      (typeof finalData.tags === 'string' ? finalData.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []);
 
     const newPostData = {
-      ...data,
+      ...finalData,
       tags: finalTags,
     };
 
@@ -91,8 +210,16 @@ export default function NewPostPage() {
 
     toast({
       title: 'Post Created (Mock)',
-      description: `"${data.title}" has been "created". This is a mock operation.`,
+      description: `"${newPostData.title}" has been "created". This is a mock operation.`,
     });
+    setIsUploading(false);
+    setUploadProgress({});
+    // Reset files and previews
+    setThumbnailFile(null);
+    setThumbnailPreview(null);
+    setMainImageFile(null);
+    setMainImagePreview(null);
+    form.reset(); // Reset the form to default values
     router.push('/admin/posts');
   };
 
@@ -161,7 +288,7 @@ export default function NewPostPage() {
                   <FormLabel>Content</FormLabel>
                   <FormControl>
                     <Editor
-                      apiKey={tinymceApiKey}
+                      apiKey={tinymceApiKey || 'no-api-key'} 
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
@@ -210,40 +337,106 @@ export default function NewPostPage() {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="thumbnailUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Thumbnail URL (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://placehold.co/400x300.png" {...field} />
-                  </FormControl>
-                  <FormDescription>A smaller image for post previews.</FormDescription>
-                  <FormMessage />
-                </FormItem>
+
+            {/* Thumbnail Upload Field */}
+            <FormItem>
+              <FormLabel htmlFor="thumbnail-upload">Thumbnail Image (Optional)</FormLabel>
+              <FormControl>
+                <Input
+                  id="thumbnail-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, setThumbnailFile, setThumbnailPreview, 'thumbnailUrl')}
+                  className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                />
+              </FormControl>
+              {uploadProgress['thumbnail'] > 0 && uploadProgress['thumbnail'] < 100 && (
+                <Progress value={uploadProgress['thumbnail']} className="w-full mt-2 h-2" />
               )}
-            />
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Main Image URL (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://placehold.co/800x600.png" {...field} />
-                  </FormControl>
-                  <FormDescription>A larger image for the main post banner.</FormDescription>
-                  <FormMessage />
-                </FormItem>
+              {thumbnailPreview && (
+                <div className="mt-2 p-2 border rounded-md inline-block">
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} objectFit="cover" className="rounded" />
+                </div>
               )}
-            />
+              <FormDescription>Upload a thumbnail (e.g., 400x300px). If you provide a URL below, this upload will be ignored.</FormDescription>
+               <FormField
+                control={form.control}
+                name="thumbnailUrl"
+                render={({ field }) => (
+                  <FormItem className="mt-2">
+                    <FormLabel>Or Enter Thumbnail URL</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://placehold.co/400x300.png" 
+                        {...field} 
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (e.target.value) { setThumbnailFile(null); setThumbnailPreview(null); } // Clear file if URL is typed
+                        }}
+                        disabled={!!thumbnailFile}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormItem>
+
+            {/* Main Image Upload Field */}
+             <FormItem>
+              <FormLabel htmlFor="main-image-upload">Main Post Image (Optional)</FormLabel>
+              <FormControl>
+                <Input
+                  id="main-image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, setMainImageFile, setMainImagePreview, 'imageUrl')}
+                  className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                />
+              </FormControl>
+              {uploadProgress['mainImage'] > 0 && uploadProgress['mainImage'] < 100 && (
+                <Progress value={uploadProgress['mainImage']} className="w-full mt-2 h-2" />
+              )}
+              {mainImagePreview && (
+                <div className="mt-2 p-2 border rounded-md inline-block">
+                  <Image src={mainImagePreview} alt="Main image preview" width={192} height={192} objectFit="cover" className="rounded"/>
+                </div>
+              )}
+              <FormDescription>Upload a main image for the post (e.g., 800x600px). If you provide a URL below, this upload will be ignored.</FormDescription>
+              <FormField
+                control={form.control}
+                name="imageUrl"
+                render={({ field }) => (
+                   <FormItem className="mt-2">
+                    <FormLabel>Or Enter Main Image URL</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="https://placehold.co/800x600.png" 
+                        {...field} 
+                        onChange={(e) => {
+                          field.onChange(e);
+                           if (e.target.value) { setMainImageFile(null); setMainImagePreview(null); } // Clear file if URL is typed
+                        }}
+                        disabled={!!mainImageFile}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormItem>
+            
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isUploading}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating...' : 'Create Post'}
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isUploading}>
+                {isUploading ? (
+                  <>
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : form.formState.isSubmitting ? 'Creating...' : 'Create Post'}
               </Button>
             </div>
           </form>
@@ -252,3 +445,21 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
+// Minimal Loader2Icon component
+const Loader2Icon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>
+);
