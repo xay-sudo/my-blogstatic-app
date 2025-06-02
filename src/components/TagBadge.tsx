@@ -7,7 +7,7 @@ interface TagBadgeProps {
 
 export default function TagBadge({ tag }: TagBadgeProps) {
   return (
-    <Badge variant="secondary" className="text-xs bg-accent/20 hover:bg-accent/40 transition-colors cursor-pointer">
+    <Badge variant="secondary" className="text-xs hover:bg-secondary/80 transition-colors cursor-pointer">
       <TagIcon className="w-3 h-3 mr-1" />
       {tag}
     </Badge>

@@ -120,7 +120,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                     <TableCell className="hidden sm:table-cell">{formatDate(post.date)}</TableCell>
                     <TableCell className="hidden md:table-cell text-xs">
                       {post.tags.slice(0, 3).map(tag => (
-                        <span key={tag} className="mr-1 mb-1 inline-block px-2 py-0.5 bg-accent/20 text-accent-foreground rounded-full text-xs">
+                        <span key={tag} className="mr-1 mb-1 inline-block px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full text-xs">
                           {tag}
                         </span>
                       ))}
