@@ -16,13 +16,15 @@ export default function PostCard({ post }: PostCardProps) {
     day: 'numeric',
   });
 
+  const displayImageUrl = post.thumbnailUrl || post.imageUrl;
+
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
-      {post.imageUrl && (
+      {displayImageUrl && (
         <Link href={`/posts/${post.slug}`} className="block">
           <div className="relative w-full h-48">
             <Image
-              src={post.imageUrl}
+              src={displayImageUrl}
               alt={post.title}
               layout="fill"
               objectFit="cover"

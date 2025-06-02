@@ -20,7 +20,8 @@ export const mockPosts: Post[] = [
       <p>Next.js 14 continues to push the boundaries of web development, offering powerful tools and a great developer experience. Dive in and start building!</p>
     `,
     tags: ['Next.js', 'JavaScript', 'Web Development', 'React'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
   {
     id: '2',
@@ -41,7 +42,8 @@ export const mockPosts: Post[] = [
       <p class="mb-4">Embrace the utility-first workflow and see your productivity soar!</p>
     `,
     tags: ['Tailwind CSS', 'CSS', 'Frontend', 'UI Design'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
   {
     id: '3',
@@ -62,7 +64,8 @@ export const mockPosts: Post[] = [
       <p class="mb-4">This hybrid approach allows you to choose the best rendering strategy for each part of your application.</p>
     `,
     tags: ['React', 'Server Components', 'Next.js', 'Performance'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
   {
     id: '4',
@@ -81,7 +84,8 @@ export const mockPosts: Post[] = [
       <p>Mastering these patterns will elevate your TypeScript skills and improve your codebase.</p>
     `,
     tags: ['TypeScript', 'Programming', 'Web Development', 'Advanced'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
   {
     id: '5',
@@ -100,7 +104,8 @@ export const mockPosts: Post[] = [
       <p>The integration of AI into web development workflows is just beginning, and its impact will continue to grow.</p>
     `,
     tags: ['AI', 'Web Development', 'Technology', 'Future'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
    {
     id: '6',
@@ -122,7 +127,8 @@ export const mockPosts: Post[] = [
       <p>Adopting minimalist principles can lead to elegant and effective designs.</p>
     `,
     tags: ['Design', 'Minimalism', 'UI/UX', 'Web Design'],
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/800x600.png',
+    thumbnailUrl: 'https://placehold.co/400x300.png',
   },
 ];
 

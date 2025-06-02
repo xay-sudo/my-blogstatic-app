@@ -38,6 +38,7 @@ const postFormSchema = z.object({
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
   imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
+  thumbnailUrl: z.string().url({ message: 'Please enter a valid URL for the thumbnail.' }).optional().or(z.literal('')),
 });
 
 type PostFormValues = z.infer<typeof postFormSchema>;
@@ -57,6 +58,7 @@ export default function NewPostPage() {
       content: '<p>Write your blog post content here...</p>',
       tags: [],
       imageUrl: '',
+      thumbnailUrl: '',
     },
     mode: 'onChange',
   });
@@ -210,13 +212,28 @@ export default function NewPostPage() {
             />
             <FormField
               control={form.control}
+              name="thumbnailUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Thumbnail URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://placehold.co/400x300.png" {...field} />
+                  </FormControl>
+                  <FormDescription>A smaller image for post previews.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="imageUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Image URL (Optional)</FormLabel>
+                  <FormLabel>Main Image URL (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://placehold.co/600x400.png" {...field} />
+                    <Input placeholder="https://placehold.co/800x600.png" {...field} />
                   </FormControl>
+                  <FormDescription>A larger image for the main post banner.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

@@ -7,4 +7,5 @@ export interface Post {
   content: string;
   tags: string[];
   imageUrl?: string;
+  thumbnailUrl?: string; // Added thumbnail URL
 }
