@@ -14,6 +14,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import GoogleIcon from '@/components/GoogleIcon'; // Import the GoogleIcon
 
 const loginFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -26,7 +28,7 @@ const signUpFormSchema = z.object({
   confirmPassword: z.string().min(6, { message: "Password must be at least 6 characters." }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords do not match.",
-  path: ["confirmPassword"], // path of error
+  path: ["confirmPassword"], 
 });
 
 
@@ -34,6 +36,7 @@ export default function LoginPage() {
   const { 
     signInWithEmailPassword, 
     signUpWithEmailPassword, 
+    signInWithGoogle, // Added Google Sign-In
     isAdminLoggedIn, 
     isLoadingAuth, 
     authError,
@@ -41,6 +44,7 @@ export default function LoginPage() {
   } = useAuth();
   const router = useRouter();
   const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const formSchema = isSignUpMode ? signUpFormSchema : loginFormSchema;
 
@@ -60,33 +64,42 @@ export default function LoginPage() {
   }, [isAdminLoggedIn, router]);
   
   useEffect(() => {
-    // Clear authError when component mounts or mode changes
     setAuthError(null);
     form.reset({ email: '', password: '', ...(isSignUpMode && { confirmPassword: '' }) });
   }, [isSignUpMode, setAuthError, form]);
 
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setAuthError(null); // Clear previous errors
+    setAuthError(null); 
     try {
       if (isSignUpMode) {
         await signUpWithEmailPassword(values as AuthFormValues);
       } else {
         await signInWithEmailPassword(values as AuthFormValues);
       }
-       // onAuthStateChanged in AuthContext handles user state update
-       // useEffect above handles redirection if isAdminLoggedIn becomes true
     } catch (error: any) {
-      // Error is already set in AuthContext, but we can log it here if needed
       console.error(isSignUpMode ? "Sign up failed:" : "Login failed:", error.message);
-      // No need to setAuthError here as it's handled by the context now
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthError(null);
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      // onAuthStateChanged in AuthContext will redirect if successful
+    } catch (error: any) {
+      console.error("Google Sign in failed on page:", error.message);
+      // AuthError is already set in context, so no need to set it here explicitly unless specific message is needed
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
   
   const toggleMode = () => {
     setIsSignUpMode(!isSignUpMode);
-    form.reset(); // Reset form fields when toggling mode
-    setAuthError(null); // Clear errors when toggling mode
+    form.reset(); 
+    setAuthError(null); 
   };
 
   if (isLoadingAuth && isAdminLoggedIn !== false) { 
@@ -114,10 +127,10 @@ export default function LoginPage() {
             {isSignUpMode ? 'Create Admin Account' : 'Admin Login'}
           </CardTitle>
           <CardDescription>
-            {isSignUpMode ? 'Fill in the details to create a new admin account.' : 'Sign in with your email and password.'}
+            {isSignUpMode ? 'Fill in the details to create a new admin account.' : 'Sign in with your email and password, or use Google.'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -127,7 +140,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="admin@example.com" {...field} />
+                      <Input type="email" placeholder="admin@example.com" {...field} disabled={isLoadingAuth || form.formState.isSubmitting || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -140,7 +153,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isLoadingAuth || form.formState.isSubmitting || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -154,7 +167,7 @@ export default function LoginPage() {
                     <FormItem>
                       <FormLabel>Confirm Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input type="password" placeholder="••••••••" {...field} disabled={isLoadingAuth || form.formState.isSubmitting || isGoogleLoading} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -169,15 +182,43 @@ export default function LoginPage() {
                 </Alert>
               )}
 
-              <Button type="submit" className="w-full" variant="primary" disabled={isLoadingAuth || form.formState.isSubmitting}>
+              <Button type="submit" className="w-full" variant="primary" disabled={isLoadingAuth || form.formState.isSubmitting || isGoogleLoading}>
                 {isLoadingAuth || form.formState.isSubmitting ? (isSignUpMode ? 'Creating Account...' : 'Signing In...') : (isSignUpMode ? 'Create Account' : 'Sign In')}
                 <LogIn className="ml-2 h-4 w-4" />
               </Button>
             </form>
           </Form>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          <Button 
+            variant="outline" 
+            className="w-full" 
+            onClick={handleGoogleSignIn}
+            disabled={isLoadingAuth || isGoogleLoading || form.formState.isSubmitting}
+          >
+            {isGoogleLoading ? (
+              'Signing in with Google...'
+            ) : (
+              <>
+                <GoogleIcon className="mr-2 h-5 w-5" />
+                Sign in with Google
+              </>
+            )}
+          </Button>
+
         </CardContent>
         <CardFooter className="flex flex-col items-center">
-            <Button variant="link" onClick={toggleMode} disabled={isLoadingAuth}>
+            <Button variant="link" onClick={toggleMode} disabled={isLoadingAuth || isGoogleLoading || form.formState.isSubmitting}>
               {isSignUpMode ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
             </Button>
         </CardFooter>
