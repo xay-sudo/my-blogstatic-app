@@ -32,9 +32,6 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert'; 
 import { Label } from '@/components/ui/label'; 
 
-import { app } from '@/lib/firebase-config'; // Import Firebase app instance
-import { getFunctions, httpsCallable, HttpsCallableResult } from 'firebase/functions'; // Import Firebase Functions
-
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
@@ -53,7 +50,8 @@ interface ScrapedPostData {
   title?: string;
   content?: string;
   thumbnailUrl?: string;
-  // Add other fields your Cloud Function might return
+  error?: string;
+  details?: string;
 }
 
 export default function NewPostPage() {
@@ -108,7 +106,7 @@ export default function NewPostPage() {
         toast({
           variant: "default", 
           title: "Large File Selected",
-          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Consider optimizing it first.`,
+          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Consider optimizing it first. This warning is informational; the file will still be processed if you submit the form.`,
           duration: 7000, 
         });
       }
@@ -123,7 +121,7 @@ export default function NewPostPage() {
     } else {
       setThumbnailFile(null);
       setThumbnailPreview(null);
-       if (e.target) {
+       if (e.target) { // Clear the input value so selecting the same file again triggers onChange
             e.target.value = '';
        }
     }
@@ -183,25 +181,29 @@ export default function NewPostPage() {
     setIsScraping(true);
     setScrapingError(null);
     setThumbnailFile(null); 
-    setThumbnailPreview(null);
+    setThumbnailPreview(null); // Clear previous preview
   
-    if (!app) {
-      const errorMsg = "Firebase app is not initialized. Cannot call Cloud Function.";
-      console.error(errorMsg);
-      setScrapingError(errorMsg);
-      toast({ variant: "destructive", title: "Initialization Error", description: errorMsg });
-      setIsScraping(false);
-      return;
-    }
+    toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
     try {
-      const functions = getFunctions(app);
-      const scrapePostFunction = httpsCallable< { url: string }, ScrapedPostData >(functions, 'scrapePost');
-      
-      toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
+      const response = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: scrapeUrl }),
+      });
 
-      const result: HttpsCallableResult<ScrapedPostData> = await scrapePostFunction({ url: scrapeUrl });
-      const scrapedData = result.data;
+      const scrapedData: ScrapedPostData = await response.json();
+
+      if (!response.ok || scrapedData.error) {
+        const errorMsg = scrapedData.error || `Failed to scrape. Status: ${response.status}`;
+        const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
+        setScrapingError(`${errorMsg}${details}`);
+        toast({ variant: "destructive", title: "Scraping Error", description: `${errorMsg}${details}`, duration: 8000 });
+        setIsScraping(false);
+        return;
+      }
       
       let populatedTitle = 'Untitled Post';
       if (scrapedData.title) {
@@ -233,23 +235,16 @@ export default function NewPostPage() {
         });
       } else {
          setThumbnailPreview(`https://placehold.co/600x400.png?text=No+Image+Found`);
+         toast({ title: "No Thumbnail Found", description: "A specific featured image could not be identified from the URL. You can manually upload one.", duration: 7000 });
       }
   
       toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
-    } catch (error: any) {
-      console.error("Error scraping content via Cloud Function:", error);
-      let toastMessage = "An unknown error occurred during scraping.";
-      const details = error.details ? ` Details: ${JSON.stringify(error.details)}` : '';
 
-      if (error.code === 'internal') {
-        toastMessage = "An internal error occurred in the scraping function. Please check the Cloud Function logs in Firebase for more details.";
-      } else if (error.message) {
-        toastMessage = `${error.message}${details}`;
-      }
-      
-      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown error'}${details}. Please check the URL or try again. If the problem persists, check the Cloud Function logs.`;
+    } catch (error: any) {
+      console.error("Error calling /api/scrape:", error);
+      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error'}. Please check the URL or try again. If the problem persists, check server logs.`;
       setScrapingError(fullErrorMessageForState);
-      toast({ variant: "destructive", title: "Scraping Error", description: toastMessage, duration: 8000 });
+      toast({ variant: "destructive", title: "Scraping Error", description: error.message || "An unknown error occurred while trying to fetch content.", duration: 8000 });
     } finally {
       setIsScraping(false);
     }
@@ -506,6 +501,7 @@ export default function NewPostPage() {
                       apiKey={tinymceApiKey || 'no-api-key'}
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
+                      value={field.value} // Ensure editor updates when form value changes programmatically
                       onEditorChange={(content, _editor) => {
                         field.onChange(content);
                         form.trigger('content');
@@ -623,4 +619,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
