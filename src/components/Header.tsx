@@ -22,9 +22,6 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (searchWrapperRef.current && !searchWrapperRef.current.contains(event.target as Node)) {
-        // If the click is outside the searchWrapper (search bar + close button)
-        // AND it's not on the search open icon itself, then close.
-        // This prevents immediate re-closing if the open icon is part of a larger clickable area issue.
         const targetIsSearchOpenIcon = (event.target as HTMLElement).closest('button[aria-label="Open search"]');
         if (!targetIsSearchOpenIcon) {
           setIsSearchOpen(false);
@@ -47,7 +44,6 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
     <>
       {/* Main Header with Logo */}
       <header className="bg-card border-b border-border">
-        {/* Banner Ad placed inside the header, above the logo/nav section */}
         <BannerAd settings={siteSettings} />
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
           <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
@@ -67,26 +63,28 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           {/* Spacer to push subsequent items to the right */}
           <div className="flex-grow" />
 
-          {/* Search Elements Group */}
-          <div className="flex items-center">
+          {/* Group for all right-aligned items */}
+          <div className="flex items-center space-x-3"> {/* Handles spacing between search and theme toggle */}
+            {/* Search Elements */}
             {isSearchOpen ? (
-              <div ref={searchWrapperRef} className="flex items-center space-x-2 mr-2">
+              <div ref={searchWrapperRef} className="flex items-center space-x-2"> {/* Handles inner spacing for open search */}
                 <SearchBarClient />
                 <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)} aria-label="Close search" className="text-background hover:bg-accent/20 hover:text-accent-foreground">
                   <X className="w-5 h-5" />
                 </Button>
               </div>
             ) : (
-              <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)} aria-label="Open search" className="text-background hover:bg-accent/20 hover:text-accent-foreground mr-2">
+              <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)} aria-label="Open search" className="text-background hover:bg-accent/20 hover:text-accent-foreground">
                 <SearchIcon className="w-5 h-5" />
               </Button>
             )}
+            
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
-          
-          {/* Theme Toggle - will be the rightmost element */}
-          <ThemeToggle />
         </div>
       </nav>
     </>
   );
 }
+
