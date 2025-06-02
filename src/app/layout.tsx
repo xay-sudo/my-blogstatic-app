@@ -9,7 +9,7 @@ import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import HeadScriptInjector from '@/components/HeadScriptInjector';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
-import BannerAd from '@/components/BannerAd'; // Import the new BannerAd component
+// BannerAd is no longer imported here as it's rendered within Header
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -43,7 +43,7 @@ export default async function RootLayout({
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col bg-background text-foreground">
         <ThemeProvider storageKey="newstoday-theme" defaultTheme="light">
-          <BannerAd settings={settings} /> {/* Banner Ad moved to the top */}
+          {/* Banner Ad is now rendered by the Header component */}
           <Header siteSettings={settings} isAdminLoggedIn={isAdminLoggedIn} />
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}

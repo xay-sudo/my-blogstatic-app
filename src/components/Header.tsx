@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
+import BannerAd from '@/components/BannerAd'; // Import BannerAd
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -40,6 +41,8 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
     <>
       {/* Main Header with Logo */}
       <header className="bg-card border-b border-border">
+        {/* Banner Ad placed inside the header, above the logo/nav section */}
+        <BannerAd settings={siteSettings} />
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
           <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             {siteSettings?.siteTitle || 'News Today'}
