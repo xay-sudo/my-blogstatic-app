@@ -478,5 +478,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
-    
