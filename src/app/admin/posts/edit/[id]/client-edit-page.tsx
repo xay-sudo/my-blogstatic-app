@@ -36,7 +36,7 @@ import { Badge } from '@/components/ui/badge';
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
-  slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
+  slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(150, { message: 'Slug must be 150 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
   tags: z.string().optional(), // Comma-separated string
