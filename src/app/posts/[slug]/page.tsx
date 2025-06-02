@@ -9,6 +9,7 @@ import PostCard from '@/components/PostCard';
 import type { Post } from '@/types'; 
 import SocialShareButtons from '@/components/SocialShareButtons';
 import { headers } from 'next/headers'; // For constructing URL
+import CommentSection from '@/components/CommentSection';
 
 interface PostPageProps {
   params: {
@@ -152,6 +153,8 @@ export default async function PostPage({ params }: PostPageProps) {
           </div>
         </section>
       )}
+
+      <CommentSection />
     </>
   );
 }
