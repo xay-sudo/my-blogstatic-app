@@ -2,7 +2,7 @@
   "siteTitle": "Newstoday",
   "siteDescription": "A modern blog platform with AI-powered tagging and content scraping.",
   "postsPerPage": 18,
-  "bannerEnabled": false,
+  "bannerEnabled": true,
   "bannerType": "customHtml",
   "bannerImageUrl": "https://placehold.co/728x90.png?text=Your+Custom+Banner+Here",
   "bannerImageLink": "https://example.com",

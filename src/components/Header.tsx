@@ -3,10 +3,9 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, Search as SearchIcon, CalendarDays } from 'lucide-react';
+import { ShieldCheck, Search as SearchIcon } from 'lucide-react'; // CalendarDays removed
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect, useState } from 'react';
-// import { getSettings } from '@/lib/settings-service'; // Removed
+// import { useEffect, useState } from 'react'; // useEffect and useState for date removed
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,32 +16,16 @@ interface HeaderProps {
 
 export default function Header({ siteSettings }: HeaderProps) {
   const { isAdminLoggedIn, isLoadingAuth } = useAuth();
-  const [currentDate, setCurrentDate] = useState('');
-  // const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null); // Removed
-  // const [isLoadingSettings, setIsLoadingSettings] = useState(true); // Removed
+  // const [currentDate, setCurrentDate] = useState(''); // Removed
 
-  useEffect(() => {
-    const today = new Date();
-    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-    setCurrentDate(today.toLocaleDateString('en-US', options));
-
-    // Fetching logic moved to RootLayout
-    // const fetchSiteSettings = async () => {
-    //   try {
-    //     const settings = await getSettings();
-    //     setSiteSettings(settings);
-    //   } catch (error) {
-    //     console.error("Failed to fetch site settings for header:", error);
-    //   } finally {
-    //     setIsLoadingSettings(false);
-    //   }
-    // };
-    // fetchSiteSettings();
-  }, []);
+  // useEffect(() => { // Removed useEffect for date
+  //   const today = new Date();
+  //   const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  //   setCurrentDate(today.toLocaleDateString('en-US', options));
+  // }, []);
 
   const renderHeaderAdSlot = () => {
-    // Use passed siteSettings directly
-    if (!siteSettings) { // Handles both null and initial loading if settings weren't passed yet (though they should be)
+    if (!siteSettings) {
       return (
         <Skeleton
           className="bg-muted/20 border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground"
@@ -75,7 +58,7 @@ export default function Header({ siteSettings }: HeaderProps) {
           height={90}
           style={{ objectFit: 'contain' }}
           data-ai-hint="advertisement banner"
-          priority // Consider if this is always LCP
+          priority
         />
       );
       if (siteSettings.bannerImageLink) {
@@ -112,16 +95,18 @@ export default function Header({ siteSettings }: HeaderProps) {
 
   return (
     <>
-      {/* Top Bar with Date */}
+      {/* Top Bar with Date REMOVED */}
+      {/* 
       <div className="bg-muted/50 border-b border-border">
         <div className="container mx-auto px-4 py-2 text-sm text-muted-foreground flex items-center">
           <CalendarDays className="w-4 h-4 mr-2" />
           {currentDate ? currentDate : <Skeleton className="h-4 w-24 bg-muted-foreground/20" />}
         </div>
-      </div>
+      </div> 
+      */}
 
       {/* Main Header with Logo and Ad space */}
-      <header className="bg-card border-b border-border">
+      <header className="bg-card border-b border-border"> {/* Consider removing top border if not desired */}
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
           <Link href="/" className="text-5xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             News Today
