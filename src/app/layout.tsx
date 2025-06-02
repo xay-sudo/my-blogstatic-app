@@ -4,8 +4,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/Header';
-import { AuthProvider } from '@/contexts/AuthContext'; 
+import { AuthProvider } from '@/contexts/AuthContext';
 import { getSettings } from '@/lib/settings-service'; // Import getSettings
+import type { SiteSettings } from '@/types';
 
 // export const metadata: Metadata = {
 //   title: 'Newstoday',
@@ -20,11 +21,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings: SiteSettings = await getSettings();
+
   return (
     <html lang="en">
       <head>
@@ -36,7 +39,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
         <AuthProvider> {/* Wrap with AuthProvider */}
-          <Header />
+          <Header siteSettings={settings} />
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}
           </main>

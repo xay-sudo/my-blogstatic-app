@@ -5,9 +5,7 @@ import { getSettings } from '@/lib/settings-service';
 import PostCard from '@/components/PostCard';
 import PaginationControlsClient from '@/components/PaginationControlsClient'; 
 import SearchBarClient from '@/components/SearchBarClient'; 
-import { Skeleton } from '@/components/ui/skeleton';
-import Image from 'next/image';
-import RenderHtmlContent from '@/components/RenderHtmlContent'; // Import the component
+// Image and RenderHtmlContent are no longer needed here for the banner
 
 interface HomePageProps {
   searchParams?: {
@@ -39,61 +37,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
-  const renderBanner = () => {
-    if (!settings.bannerEnabled) {
-      return null;
-    }
-
-    if (settings.bannerType === 'image' && settings.bannerImageUrl) {
-      const bannerContent = (
-        <Image
-          src={settings.bannerImageUrl}
-          alt={settings.bannerImageAltText || 'Homepage Banner'}
-          width={728}
-          height={90}
-          className="mx-auto"
-          style={{ objectFit: 'contain' }}
-          data-ai-hint="advertisement banner"
-        />
-      );
-      if (settings.bannerImageLink) {
-        return (
-          <a href={settings.bannerImageLink} target="_blank" rel="noopener noreferrer">
-            {bannerContent}
-          </a>
-        );
-      }
-      return bannerContent;
-    }
-
-    if (settings.bannerType === 'customHtml' && settings.bannerCustomHtml) {
-      return (
-        <RenderHtmlContent
-          htmlString={settings.bannerCustomHtml}
-          className="w-full max-w-[728px] h-[90px] mx-auto flex items-center justify-center"
-          placeholderStyle={{ minHeight: '90px' }} // Ensure placeholder div has dimensions
-        />
-      );
-    }
-    
-    // Fallback for enabled but misconfigured banner
-    return (
-      <div 
-        style={{ width: '728px', height: '90px', minHeight: '90px' }} 
-        className="bg-muted/20 border border-dashed border-muted-foreground/50 flex items-center justify-center text-sm text-muted-foreground mx-auto"
-        aria-label="Homepage Banner Area"
-      >
-        Banner Misconfigured (728x90)
-      </div>
-    );
-  };
+  // Banner rendering logic is removed from here
 
   if (allPosts.length === 0 && !searchTerm) { 
      return (
         <div className="space-y-12">
-          <div className="flex justify-center">
-            {renderBanner()}
-          </div>
+          {/* Banner div removed from here */}
           <div className="flex justify-center">
              <SearchBarClient initialSearchTerm={searchTerm} />
           </div>
@@ -106,9 +55,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="space-y-12">
-      <div className="flex justify-center">
-        {renderBanner()}
-      </div>
+      {/* Banner div removed from here */}
 
       <div className="flex justify-center">
         <SearchBarClient initialSearchTerm={searchTerm} />

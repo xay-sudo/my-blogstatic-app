@@ -225,18 +225,18 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
             
             <Separator />
 
-            {/* Homepage Banner Settings */}
+            {/* Header Ad Slot Settings */}
             <div>
-              <h3 className="text-lg font-medium mb-4">Homepage Banner</h3>
+              <h3 className="text-lg font-medium mb-4">Header Ad Slot (728x90)</h3>
               <FormField
                 control={form.control}
                 name="bannerEnabled"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                     <div className="space-y-0.5">
-                      <FormLabel>Enable Banner</FormLabel>
+                      <FormLabel>Enable Ad Slot</FormLabel>
                       <FormDescription>
-                        Show a banner at the top of the homepage.
+                        Show an ad slot in the site header.
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -256,7 +256,7 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                     name="bannerType"
                     render={({ field }) => (
                       <FormItem className="space-y-3">
-                        <FormLabel>Banner Type</FormLabel>
+                        <FormLabel>Ad Slot Type</FormLabel>
                         <FormControl>
                           <RadioGroup
                             onValueChange={field.onChange}
@@ -268,7 +268,7 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                               <FormControl>
                                 <RadioGroupItem value="image" />
                               </FormControl>
-                              <FormLabel className="font-normal flex items-center"><ImageIcon className="w-4 h-4 mr-2" /> Image Banner</FormLabel>
+                              <FormLabel className="font-normal flex items-center"><ImageIcon className="w-4 h-4 mr-2" /> Image</FormLabel>
                             </FormItem>
                             <FormItem className="flex items-center space-x-2 space-y-0">
                               <FormControl>
@@ -290,11 +290,11 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                         name="bannerImageUrl"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Banner Image URL</FormLabel>
+                            <FormLabel>Image URL</FormLabel>
                             <FormControl>
-                              <Input type="url" placeholder="https://example.com/banner.jpg" {...field} disabled={isSubmitting} />
+                              <Input type="url" placeholder="https://example.com/ad-image.jpg" {...field} disabled={isSubmitting} />
                             </FormControl>
-                            <FormDescription>The direct URL to the banner image (e.g., 728x90px).</FormDescription>
+                            <FormDescription>The direct URL to the ad image (e.g., 728x90px).</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -304,11 +304,11 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                         name="bannerImageLink"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Banner Link URL (Optional)</FormLabel>
+                            <FormLabel>Image Link URL (Optional)</FormLabel>
                             <FormControl>
-                              <Input type="url" placeholder="https://example.com/your-link" {...field} disabled={isSubmitting} />
+                              <Input type="url" placeholder="https://advertiser.com/product" {...field} disabled={isSubmitting} />
                             </FormControl>
-                            <FormDescription>Where the banner image should link to when clicked.</FormDescription>
+                            <FormDescription>Where the ad image should link to when clicked.</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -318,11 +318,11 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                         name="bannerImageAltText"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Banner Image Alt Text</FormLabel>
+                            <FormLabel>Image Alt Text</FormLabel>
                             <FormControl>
-                              <Input placeholder="Descriptive alt text" {...field} disabled={isSubmitting} />
+                              <Input placeholder="Descriptive alt text for ad" {...field} disabled={isSubmitting} />
                             </FormControl>
-                            <FormDescription>Important for accessibility and SEO.</FormDescription>
+                            <FormDescription>Important for accessibility.</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -340,7 +340,7 @@ export default function ClientSettingsPage({ initialSettings }: ClientSettingsPa
                             <FormLabel>Custom HTML Code</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="<div>Your HTML banner code here...</div>"
+                                placeholder="<div>Your ad script or custom HTML here...</div>"
                                 {...field}
                                 rows={6}
                                 disabled={isSubmitting}
