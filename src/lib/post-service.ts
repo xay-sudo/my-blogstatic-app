@@ -26,7 +26,7 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !supabaseUrl.startsWith('http')) {
+  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !isValidHttpUrl(supabaseUrl)) {
     throw new Error(
       `CRITICAL: NEXT_PUBLIC_SUPABASE_URL is not defined, is a placeholder, or is invalid for admin client. Please check environment variables. Current value: "${supabaseUrl}"`
     );
@@ -50,15 +50,22 @@ async function seedInitialPostsFromJson() {
   if (initialPostsDataLoaded) return;
 
   try {
-    const { count, error: countError } = await supabase.from('posts').select('*', { count: 'exact', head: true });
-    if (countError) {
-      console.warn('Could not check post count in DB for seeding:', JSON.stringify(countError, null, 2));
-      initialPostsDataLoaded = true;
-      return;
+    const adminSupabaseForSeedCheck = getSupabaseAdminClient(); // Use admin for initial check/seed
+    const { count, error: countError } = await adminSupabaseForSeedCheck.from('posts').select('*', { count: 'exact', head: true });
+    
+    if (countError && countError.code !== '42P01') { // 42P01: undefined_table. If table doesn't exist, we'll try to create it.
+      console.warn('Could not check post count in DB for seeding (may indicate RLS or other issue if table exists):', JSON.stringify(countError, null, 2));
+      // Proceed cautiously, hoping table creation might be pending or an RLS issue for count.
     }
 
-    if (count === 0) {
-      console.log('Posts table is empty. Attempting to seed from posts.json...');
+
+    if (count === 0 || (countError && countError.code === '42P01')) {
+      if (countError && countError.code === '42P01') {
+        console.log("Posts table does not exist. Will attempt to seed which implies table creation if DDL is correct.");
+      } else {
+        console.log('Posts table is empty. Attempting to seed from posts.json...');
+      }
+      
       const jsonData = await fs.readFile(postsJsonFilePath, 'utf-8');
       const postsFromFile = JSON.parse(jsonData) as Post[];
 
@@ -82,14 +89,14 @@ async function seedInitialPostsFromJson() {
           console.log(`Successfully seeded ${postsToInsert.length} posts from posts.json to Supabase.`);
         }
       }
-    } else {
+    } else if (count !== null && count > 0) {
       console.log('Posts table is not empty. Skipping seeding from JSON.');
     }
   } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-        console.warn('Could not read or parse posts.json for initial seeding:', error.message);
+    if (error.code !== 'ENOENT') { // ENOENT: posts.json not found, which is fine.
+        console.warn('Could not read or parse posts.json for initial seeding (or other error during seed check):', error.message);
     } else {
-        console.log('posts.json not found, skipping initial seeding.');
+        console.log('posts.json not found, skipping initial seeding from file.');
     }
   } finally {
     initialPostsDataLoaded = true;
@@ -100,7 +107,7 @@ async function seedInitialPostsFromJson() {
 export const getAllPosts = async (): Promise<Post[]> => {
   await seedInitialPostsFromJson();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabase // public client for reads
     .from('posts')
     .select('*')
     .order('date', { ascending: false });
@@ -121,7 +128,7 @@ export const getPostBySlug = async (slug: string): Promise<Post | undefined> => 
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined;
+    if (error.code === 'PGRST116') return undefined; // Row not found, not an "error" for this function's purpose
     console.error('Error fetching post by slug:', JSON.stringify(error, null, 2));
     return undefined;
   }
@@ -137,7 +144,7 @@ export const getPostById = async (id: string): Promise<Post | undefined> => {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined;
+    if (error.code === 'PGRST116') return undefined; // Row not found
     console.error('Error fetching post by ID:', JSON.stringify(error, null, 2));
     return undefined;
   }
@@ -147,19 +154,31 @@ export const getPostById = async (id: string): Promise<Post | undefined> => {
 function formatSupabaseError(supabaseError: any): string {
   if (!supabaseError) return "An unknown error occurred with the database operation.";
 
-  // Prioritize more specific fields from Supabase error object
-  if (supabaseError.details && typeof supabaseError.details === 'string') return supabaseError.details;
-  if (supabaseError.message && typeof supabaseError.message === 'string' && supabaseError.message !== "An error occurred" && supabaseError.message.trim() !== "" && supabaseError.message.trim() !== "{}") return supabaseError.message;
-  if (supabaseError.hint && typeof supabaseError.hint === 'string') return supabaseError.hint;
+  if (supabaseError.details && typeof supabaseError.details === 'string' && supabaseError.details.trim() !== "") {
+    return supabaseError.details;
+  }
+  if (supabaseError.message && typeof supabaseError.message === 'string' && supabaseError.message.trim() !== "" && supabaseError.message !== "An error occurred" && supabaseError.message !== "{}") {
+    // Try to make common PG errors more readable
+    if (supabaseError.message.includes("violates unique constraint")) {
+        const constraintName = supabaseError.message.match(/"(.*?)"/)?.[1];
+        return `Data conflict: A record with this value already exists (violates ${constraintName || 'unique constraint'}). Please ensure fields like 'slug' are unique.`;
+    }
+    if (supabaseError.message.includes("violates not-null constraint")) {
+        const columnName = supabaseError.message.match(/null value in column "(.*?)"/)?.[1];
+        return `Missing data: The field '${columnName || 'a required field'}' cannot be empty.`;
+    }
+    return supabaseError.message;
+  }
+  if (supabaseError.hint && typeof supabaseError.hint === 'string' && supabaseError.hint.trim() !== "") {
+    return supabaseError.hint;
+  }
 
-  // Fallback for less specific or empty errors
   const stringifiedError = JSON.stringify(supabaseError);
-  if (stringifiedError !== "{}") { // If there's some content, even if not standard
+  if (stringifiedError !== "{}") {
     return `Database error: ${stringifiedError}. CRITICAL: Inspect server logs for the full raw error.`;
   }
 
-  // This is the most generic case, meaning the error object was likely empty.
-  return "Supabase database operation failed. The Supabase client returned minimal error details. CRITICAL: Inspect server logs for the raw Supabase error. This often indicates an issue with the SERVICE_ROLE_KEY or a database constraint violation.";
+  return "Supabase database operation failed. The Supabase client returned minimal error details. CRITICAL: Inspect server logs for the raw Supabase error. This often indicates: 1. An incorrect or missing SUPABASE_SERVICE_ROLE_KEY. 2. A database constraint violation (e.g., duplicate slug, missing required field). 3. The 'posts' table or required SQL functions are not correctly set up in your Supabase project.";
 }
 
 export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount'> & { viewCount?: number }): Promise<Post> => {
@@ -168,8 +187,7 @@ export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount
     adminSupabase = getSupabaseAdminClient();
   } catch (e: any) {
     console.error('Failed to initialize Supabase admin client in addPost:', e.message);
-    // This error should be specific from getSupabaseAdminClient (e.g., "CRITICAL: SUPABASE_SERVICE_ROLE_KEY...")
-    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+    throw new Error(`Configuration error preventing post creation: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
   }
 
   const postToInsert = {
@@ -193,7 +211,7 @@ export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount
     const friendlyErrorMessage = formatSupabaseError(error);
     throw new Error(`Could not add post. ${friendlyErrorMessage}`);
   }
-  if (!data) { // Should not happen if error is null, but as a safeguard
+  if (!data) {
     throw new Error('Could not add post. No data returned from Supabase after insert, despite no error.');
   }
   return { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post;
@@ -205,20 +223,21 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
     adminSupabase = getSupabaseAdminClient();
   } catch (e: any)    {
     console.error('Failed to initialize Supabase admin client in updatePost:', e.message);
-    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+    throw new Error(`Configuration error preventing post update: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
   }
 
   const postToUpdate: { [key: string]: any } = {};
-  if (updatedPostData.slug) postToUpdate.slug = updatedPostData.slug;
-  if (updatedPostData.title) postToUpdate.title = updatedPostData.title;
-  if (updatedPostData.content) postToUpdate.content = updatedPostData.content;
-  if (updatedPostData.tags) postToUpdate.tags = updatedPostData.tags;
-  if (updatedPostData.hasOwnProperty('thumbnailUrl')) postToUpdate.thumbnail_url = updatedPostData.thumbnailUrl;
+  if (updatedPostData.slug !== undefined) postToUpdate.slug = updatedPostData.slug;
+  if (updatedPostData.title !== undefined) postToUpdate.title = updatedPostData.title;
+  if (updatedPostData.content !== undefined) postToUpdate.content = updatedPostData.content;
+  if (updatedPostData.tags !== undefined) postToUpdate.tags = updatedPostData.tags;
+  if (updatedPostData.hasOwnProperty('thumbnailUrl')) postToUpdate.thumbnail_url = updatedPostData.thumbnailUrl; // Allow setting to null
   if (updatedPostData.viewCount !== undefined) postToUpdate.view_count = updatedPostData.viewCount;
+
 
   if (Object.keys(postToUpdate).length === 0) {
     console.warn('updatePost called with no fields to update for postId:', postId);
-    return getPostById(postId); // Return current post if nothing to update
+    return getPostById(postId);
   }
 
   const { data, error } = await adminSupabase
@@ -233,7 +252,7 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
     const friendlyErrorMessage = formatSupabaseError(error);
     throw new Error(`Could not update post. ${friendlyErrorMessage}`);
   }
-  if (!data && !error) { // No error but no data, means post with ID might not exist
+  if (!data && !error) {
      console.warn(`Post with ID ${postId} not found during update, or no changes made.`);
      return undefined;
   }
@@ -246,7 +265,7 @@ export const deletePostById = async (postId: string): Promise<void> => {
     adminSupabase = getSupabaseAdminClient();
   } catch (e: any) {
     console.error('Failed to initialize Supabase admin client in deletePostById:', e.message);
-    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+    throw new Error(`Configuration error preventing post deletion: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
   }
 
   const { error } = await adminSupabase
@@ -266,20 +285,17 @@ export const incrementViewCount = async (postId: string): Promise<void> => {
   try {
     adminSupabase = getSupabaseAdminClient();
   } catch (e: any) {
-    // For view count, we might not want to throw a hard error that crashes a page view
-    // if only the service key is misconfigured for this non-critical background op.
     console.error('Failed to initialize Supabase admin client for incrementViewCount (non-critical):', e.message);
-    return; // Silently fail if admin client can't be initialized for this
+    return;
   }
 
   const { error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
 
   if (error) {
-    // Not throwing an error here as it's a non-critical background operation for the user
     console.warn('Error incrementing view count (raw Supabase error):', JSON.stringify(error, null, 2));
   }
 };
 
 if (typeof window === 'undefined') {
-  // Defer actual seeding to first function call.
+  // Seeding is deferred to the first data access call
 }
