@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react'; // Added Save
 import { createPostAction } from '@/app/actions';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
@@ -190,7 +190,7 @@ export default function NewPostPage() {
 
 
   const handleSuggestTags = async (contentToUse?: string) => {
-    const content = contentToUse || (editorRef.current ? editorRef.current.getContent() : form.getValues('content'));
+    const content = contentToUse || (editorRef.current ? editorRef.current.getContent({format: 'text'}) : form.getValues('content'));
     if (!content || content.trim().length < 50) {
       setAiTagsError('Content is too short (less than 50 characters) to suggest tags effectively.');
       setSuggestedAiTags([]);
@@ -204,13 +204,14 @@ export default function NewPostPage() {
       const currentTagsString = form.getValues('tags') || '';
       const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
       const newSuggestions = result.tags.filter(tag => !currentTagsArray.includes(tag.toLowerCase()));
-      setSuggestedAiTags(Array.from(new Set(newSuggestions)));
-      if (newSuggestions.length === 0 && result.tags.length > 0) {
-        toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
-      } else if (newSuggestions.length === 0) {
-        toast({ title: "AI Suggestions", description: "No new tags suggested by AI."});
-      } else {
+      
+      if (newSuggestions.length > 0) {
+        setSuggestedAiTags(Array.from(new Set(newSuggestions)));
         toast({ title: "AI Tags Suggested!", description: "Review the suggestions below."});
+      } else if (result.tags.length > 0) {
+        toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
+      } else {
+        toast({ title: "AI Suggestions", description: "No new tags suggested by AI."});
       }
     } catch (e) {
       console.error('Error suggesting tags:', e);
@@ -341,9 +342,9 @@ export default function NewPostPage() {
       
       await autoProcessScrapedThumbnail(scrapedData.thumbnailDataUri, scrapedData.thumbnailUrl);
 
-      // Automatically suggest tags after content is populated
       if (scrapedData.content && scrapedData.content.trim().length >= 50) {
-        await handleSuggestTags(scrapedData.content);
+        // Pass the HTML content to handleSuggestTags for plaintext extraction by the AI flow
+        await handleSuggestTags(editorRef.current ? editorRef.current.getContent({ format: 'text' }) : scrapedData.content);
       } else if (scrapedData.content) {
         setAiTagsError('Scraped content is too short (less than 50 characters) for effective AI tag suggestions.');
         setSuggestedAiTags([]);
@@ -373,12 +374,38 @@ export default function NewPostPage() {
         setIsSubmittingForm(false);
         return;
     }
+
+    let finalTags = data.tags ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0) : [];
+    
+    const contentForAi = editorRef.current ? editorRef.current.getContent({format: 'text'}) : data.content;
+
+    if (contentForAi && contentForAi.trim().length >= 50) {
+      try {
+        toast({title: "Generating AI Tags...", description: "Please wait while tags are being generated for the content."});
+        setIsSuggestingTags(true); // Reuse for loading state visual
+        const aiResult = await suggestTags({ blogPostContent: contentForAi });
+        setIsSuggestingTags(false);
+        const newAiTags = aiResult.tags.filter(tag => !finalTags.includes(tag.toLowerCase()));
+        if (newAiTags.length > 0) {
+          finalTags = [...finalTags, ...newAiTags.map(t => t.toLowerCase())];
+           toast({title: "AI Tags Added", description: `${newAiTags.length} new AI tags were automatically added.`});
+        } else if (aiResult.tags.length > 0) {
+          toast({title: "AI Tags Checked", description: "AI suggestions were already covered by manual tags or no new unique tags found."});
+        } else {
+           toast({title: "AI Tags", description: "No specific tags suggested by AI for this content."});
+        }
+      } catch (e) {
+        console.error('Error suggesting tags during save:', e);
+        toast({variant: "destructive", title: "AI Tagging Failed on Save", description: "Could not generate AI tags automatically. Post will be saved with manual tags only."});
+        setIsSuggestingTags(false);
+      }
+    }
     
     const formData = new FormData();
     formData.append('title', data.title);
     formData.append('slug', data.slug);
     formData.append('content', data.content);
-    formData.append('tags', data.tags || '');
+    formData.append('tags', Array.from(new Set(finalTags)).join(', ')); // Ensure unique tags and join
 
     if (thumbnailFile) {
       formData.append('thumbnailFile', thumbnailFile);
@@ -407,7 +434,7 @@ export default function NewPostPage() {
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
-        setSuggestedAiTags([]);
+        setSuggestedAiTags([]); // Clear UI suggestions
         setAiTagsError(null);
         setScrapeUrl(''); 
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
@@ -659,39 +686,27 @@ export default function NewPostPage() {
                       disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
                     />
                   </FormControl>
-                  <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
+                  <FormDescription>Comma-separated tags. AI will also attempt to add tags on save.</FormDescription>
                   <FormMessage />
+                  {/* Restored UI for AI tag suggestions after scraping */}
                   <div className="mt-3 space-y-2">
-                    <Button 
-                      type="button" 
-                      onClick={() => handleSuggestTags()} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping || isProcessingScrapedThumbnail }
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center"
-                    >
-                      {isSuggestingTags ? (
-                        <>
-                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                          Suggesting Tags...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2 text-primary" />
-                          Suggest Tags with AI
-                        </>
-                      )}
-                    </Button>
-
+                    {isSuggestingTags && !isSubmittingForm && ( // Show loader only for scrape-time suggestions
+                        <div className="flex items-center text-sm text-muted-foreground">
+                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                            <span>Suggesting tags from scraped content...</span>
+                        </div>
+                    )}
                     {aiTagsError && (
                       <div className="text-destructive flex items-center text-sm">
                         <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
                       </div>
                     )}
-
                     {suggestedAiTags.length > 0 && (
                       <div>
-                        <p className="text-xs font-medium mb-1 text-muted-foreground">Click to add:</p>
+                        <p className="text-xs font-medium mb-1 text-muted-foreground flex items-center">
+                          <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
+                          AI Suggestions (click to add):
+                        </p>
                         <div className="flex flex-wrap gap-1.5">
                           {suggestedAiTags.map((tag) => (
                             <Badge
@@ -699,6 +714,7 @@ export default function NewPostPage() {
                               variant="secondary"
                               onClick={() => addAiTagToForm(tag)}
                               className="cursor-pointer hover:bg-primary/20 text-xs"
+                              title={`Add tag: ${tag}`}
                             >
                               {tag}
                             </Badge>
@@ -706,16 +722,12 @@ export default function NewPostPage() {
                         </div>
                       </div>
                     )}
-                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length >= 50 && (
+                    {/* Message if content is too short for initial suggestions or no suggestions found */}
+                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length < 50 && (
                         <p className="text-xs text-muted-foreground">
-                          Content is ready. Click the button above to get AI tag suggestions.
+                          If you import content, AI tag suggestions will appear here if the content is sufficient (50+ characters).
                         </p>
-                      )}
-                     {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length < 50 && (
-                        <p className="text-xs text-muted-foreground">
-                          Write some content (at least 50 characters) and click the button above to get tag suggestions.
-                        </p>
-                      )}
+                    )}
                   </div>
                 </FormItem>
               )}
@@ -726,12 +738,17 @@ export default function NewPostPage() {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
-                {isSubmittingForm ? (
+                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) ? ( // Show submitting state if form is submitting, even if tags are suggesting during save
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Creating Post...
                   </>
-                ) : 'Create Post'}
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                     Create Post
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -741,3 +758,4 @@ export default function NewPostPage() {
   );
 }
 
+    
