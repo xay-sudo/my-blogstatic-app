@@ -6,31 +6,36 @@ import * as cheerio from 'cheerio';
 const elementsToRemove = [
   'script', 'style', 'noscript', 'iframe', 'header', 'footer', 'nav', 'aside',
   '.sidebar', '.comments', '.comment-form', '.comment-respond', '#comments', '#respond',
-  '.related-posts', '.related_posts', // common variations for related content
-  '.ad', '.ads', '.advert', '.advertisement', // common ad classes
-  '[class*="ad-"]', '[id*="ad-"]', // classes/ids containing "ad-"
-  '[class*="-ad"]', '[id*="-ad"]', // classes/ids ending with "-ad"
-  '[class*="adsbygoogle"]', // Google ads
-  '[class*="advertis"]', '[id*="advertis"]', // "advertising", "advertisement"
-  '[class*="sponsor"]', '[id*="sponsor"]', // "sponsored"
-  '[class*="promo"]', '[id*="promo"]', // "promotion"
-  '[class*="widget"]', '[id*="widget"]', // widgets
-  '.social-share', '.social-links', '.share-buttons', // social sharing
-  '.author-bio', '.author-box', // author bios that might be separate from main content
-  'form', // most forms are not main content
-  '[aria-hidden="true"]', // accessibility, often for non-visible elements
-  '.sr-only', '.screen-reader-text', // screen reader only text
-  // common navigation/menu patterns by class or id
+  '.related-posts', '.related_posts', 
+  '.ad', '.ads', '.advert', '.advertisement', 
+  '[class*="ad-"]', '[id*="ad-"]', 
+  '[class*="-ad"]', '[id*="-ad"]', 
+  '[class*="adsbygoogle"]', 
+  '[class*="advertis"]', '[id*="advertis"]', 
+  '[class*="sponsor"]', '[id*="sponsor"]', 
+  '[class*="promo"]', '[id*="promo"]', 
+  '[class*="widget"]', '[id*="widget"]', 
+  '.social-share', '.social-links', '.share-buttons', 
+  '.author-bio', '.author-box', 
+  'form', 
+  '[aria-hidden="true"]', 
+  '.sr-only', '.screen-reader-text', 
   '[class*="nav"]', '[id*="nav"]',
   '[class*="menu"]', '[id*="menu"]',
-  // elements with display:none or visibility:hidden (inline styles)
   '[style*="display:none"]', '[style*="display: none"]',
   '[style*="visibility:hidden"]', '[style*="visibility: hidden"]',
-  // common cookie banners/popups
   '[id*="cookie"]', '[class*="cookie"]',
   '[id*="gdpr"]', '[class*="gdpr"]',
   '[id*="popup"]', '[class*="popup"]', '[class*="modal"]', '[id*="modal"]',
-  //figcaption, figure > figcaption might be desired, but loose figcaption might be clutter
+  // More aggressive removals for "everything"
+  '.header', '.footer', '.site-header', '.site-footer', '.main-nav', '.primary-nav', '.secondary-nav',
+  '.breadcrumb', '.breadcrumbs', '.pagination', '.pager', '.subnav', '.flyout', '.dropdown',
+  '.skip-link', '.skip-to-content', '.overlay', '.lightbox', '.banner', '.alert', '.notice',
+  '.social', '.sharing', '.tools', '.actions', '.meta', '.entry-meta', '.post-meta',
+  '.byline', '.author', '.timestamp', '.date', '.categories', '.tags', '.related',
+  '#header', '#footer', '#sidebar', '#navigation', '#comments-section',
+  'figure > figcaption', // Remove loose figcaptions, or figcaptions that are direct children of figure if desired.
+  'dialog' // Remove dialog elements
 ].join(', ');
 
 function cleanTitle(title: string, siteHostname: string): string {
@@ -40,19 +45,16 @@ function cleanTitle(title: string, siteHostname: string): string {
 
   let cleanedTitle = title;
   const lowerSiteHostname = siteHostname.toLowerCase().replace(/^www\./, '');
-  const commonSeparators = ['|', '-', '–', ':']; // en-dash, em-dash
+  const commonSeparators = ['|', '-', '–', ':']; 
 
-  // Create regex patterns to remove hostname at the beginning or end, surrounded by optional separators and spaces
-  // Escape special characters in hostname for regex
   const escapedHostname = lowerSiteHostname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   
   const patterns = [];
   for (const sep of commonSeparators) {
     const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    patterns.push(new RegExp(`^\\s*${escapedHostname}\\s*${escapedSep}\\s*`, 'i')); // Hostname at start
-    patterns.push(new RegExp(`\\s*${escapedSep}\\s*${escapedHostname}\\s*$`, 'i')); // Hostname at end
+    patterns.push(new RegExp(`^\\s*${escapedHostname}\\s*${escapedSep}\\s*`, 'i')); 
+    patterns.push(new RegExp(`\\s*${escapedSep}\\s*${escapedHostname}\\s*$`, 'i')); 
   }
-  // Also for hostname at the very beginning or end without explicit separator (less common for titles)
   patterns.push(new RegExp(`^\\s*${escapedHostname}\\s*`, 'i'));
   patterns.push(new RegExp(`\\s*${escapedHostname}\\s*$`, 'i'));
 
@@ -61,7 +63,6 @@ function cleanTitle(title: string, siteHostname: string): string {
     cleanedTitle = cleanedTitle.replace(pattern, '');
   }
   
-  // Fallback for site name that might be just the first part of the hostname (e.g. 'myblog' from 'myblog.wordpress.com')
   const siteNameParts = lowerSiteHostname.split('.');
   if (siteNameParts.length > 1) {
     const primarySiteName = siteNameParts[0];
@@ -79,8 +80,6 @@ function cleanTitle(title: string, siteHostname: string): string {
     }
   }
 
-
-  // Remove leading/trailing common separators that might be left over
   for (const sep of commonSeparators) {
      const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
      cleanedTitle = cleanedTitle.replace(new RegExp(`^\\s*${escapedSep}\\s*`), '');
@@ -101,7 +100,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required and must be a string.' }, { status: 400 });
     }
 
-    // Validate URL format
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(requestUrlString);
@@ -131,7 +129,6 @@ export async function POST(request: NextRequest) {
       'Untitled Post';
     
     extractedTitle = cleanTitle(extractedTitle, parsedUrl.hostname);
-
 
     let content = '';
     const contentSelectors = [
@@ -172,7 +169,6 @@ export async function POST(request: NextRequest) {
              img.remove();
           }
         });
-        // Remove empty p, div, span tags
         $contentClone.find('p, div, span').each((i, el) => {
           const element = $(el);
           if (element.html()?.trim() === '' && element.children().length === 0 && !element.attr('style')?.includes('background-image')) {
@@ -180,7 +176,7 @@ export async function POST(request: NextRequest) {
           }
         });
         content = $contentClone.html() || '';
-        if (content.trim().length > 200) break; // Prefer longer content if multiple selectors match
+        if (content.trim().length > 200) break; 
       }
     }
     
@@ -197,7 +193,6 @@ export async function POST(request: NextRequest) {
               } catch (e) { /* empty */ }
             }
         });
-        // Remove empty p, div, span tags from body fallback
         $bodyClone.find('p, div, span').each((i, el) => {
           const element = $(el);
           if (element.html()?.trim() === '' && element.children().length === 0 && !element.attr('style')?.includes('background-image')) {
@@ -218,7 +213,23 @@ export async function POST(request: NextRequest) {
       try {
         featuredImageUrl = new URL(featuredImageUrl, requestUrlString).href;
       } catch (e) {
-        featuredImageUrl = ''; 
+        featuredImageUrl = undefined; // Set to undefined if resolution fails
+      }
+    }
+    
+    let thumbnailDataUri: string | null = null;
+    if (featuredImageUrl) {
+      try {
+        const imageResponse = await axios.get(featuredImageUrl, { 
+          responseType: 'arraybuffer',
+          timeout: 10000, // Timeout for image download
+        });
+        const contentType = imageResponse.headers['content-type'] || 'image/jpeg'; // Default to jpeg
+        const imageBuffer = Buffer.from(imageResponse.data);
+        thumbnailDataUri = `data:${contentType};base64,${imageBuffer.toString('base64')}`;
+      } catch (imgError: any) {
+        console.warn(`Failed to download scraped image ${featuredImageUrl}: ${imgError.message}`);
+        thumbnailDataUri = null; // Set to null if image download fails
       }
     }
     
@@ -227,7 +238,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       title: extractedTitle || 'Untitled Post',
       content: content || '<p>Content could not be extracted or was empty after cleaning.</p>',
-      thumbnailUrl: featuredImageUrl || null,
+      thumbnailUrl: featuredImageUrl || null, // Keep original URL for reference if needed
+      thumbnailDataUri: thumbnailDataUri, // This will be used by the client
     });
 
   } catch (error: any) {
@@ -250,11 +262,10 @@ export async function POST(request: NextRequest) {
         errorMessage = 'Invalid URL provided.';
         statusCode = 400;
     } else {
-      // For other types of errors, use a generic message but keep the original error detail
       errorDetails = error.message || 'An unexpected error occurred during scraping.';
     }
     
-    return NextResponse.json({ error: errorMessage, details: errorDetails }, { status: statusCode });
+    return NextResponse.json({ error: errorMessage, details: errorDetails, from: 'api-scrape' }, { status: statusCode });
   }
 }
 
