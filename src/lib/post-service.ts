@@ -326,7 +326,18 @@ export const incrementViewCount = async (postId: string): Promise<number | null>
     if (typeof data === 'number') {
       return data;
     } else {
-      console.warn(`[ViewCounter] RPC 'increment_post_view_count' for postId '${postId}' did not return a number as expected. Returned: ${JSON.stringify(data)}`);
+      console.warn(
+        `!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n` +
+        `[ViewCounter] UNEXPECTED RPC RESPONSE for postId '${postId}'.\n` +
+        `The SQL function 'increment_post_view_count' in Supabase was expected to return a single integer (the new view count).\n` +
+        `Instead, it returned: ${JSON.stringify(data)}\n` +
+        `COMMON CAUSES & FIXES:\n` +
+        `  1. SQL FUNCTION NOT RETURNING INTEGER: Ensure your SQL function in Supabase has 'RETURNS integer' and includes 'RETURN new_view_count;' at the end.\n` +
+        `     The correct SQL function was provided in the previous instructions. Please re-apply it carefully in your Supabase SQL Editor.\n` +
+        `  2. RPC CALL ERROR (LESS LIKELY IF NO SupabaseError): There might be an issue with how the RPC call itself is being processed if the structure of 'data' is very unusual.\n` +
+        `View count WILL NOT be updated correctly on the page for this visit.\n` +
+        `!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`
+      );
       return null;
     }
   }
