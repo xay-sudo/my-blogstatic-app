@@ -7,11 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card'; // CardTitle, CardDescription removed as they are in parent
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
-import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2 } from 'lucide-react'; // Search icon removed
+import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2 } from 'lucide-react'; 
 import { Skeleton } from '@/components/ui/skeleton';
-// Input component removed as it's no longer used for search
 import { useToast } from '@/hooks/use-toast';
-import { deletePostAction } from '@/app/actions'; // Import server action
+import { deletePostAction } from '@/app/actions'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
+import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
 
 interface AdminPostsClientPageProps {
   initialPosts: Post[];
@@ -31,22 +30,27 @@ interface AdminPostsClientPageProps {
 
 export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientPageProps) {
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  // const [filteredPosts, setFilteredPosts] = useState<Post[]>(initialPosts); // Will use 'posts' directly
-  const [isLoading, setIsLoading] = useState(false); // For client-side operations like delete
-  // const [searchTerm, setSearchTerm] = useState(''); // Search term state removed
+  const [isLoading, setIsLoading] = useState(false); 
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition(); // For delete operation
+  const [isPending, startTransition] = useTransition(); 
+  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Added from useAuth
 
   useEffect(() => {
     setPosts(initialPosts);
-    // setFilteredPosts(initialPosts); // Update will be directly on 'posts'
   }, [initialPosts]);
 
-  // useEffect to filter posts based on searchTerm removed
-
   const handleDeletePost = async (postId: string, postTitle: string) => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({
+        variant: 'destructive',
+        title: 'Unauthorized',
+        description: 'You do not have permission to delete posts.',
+      });
+      return;
+    }
+
     startTransition(async () => {
-      setIsLoading(true); // General loading state for UI feedback
+      setIsLoading(true); 
       const result = await deletePostAction(postId);
       if (result.success) {
         toast({
@@ -83,7 +87,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           </p>
         </div>
         <Link href="/admin/posts/new">
-          <Button variant="primary">
+          <Button variant="primary" disabled={isLoadingAuth || !isAdminLoggedIn}>
             <PlusCircle className="w-5 h-5 mr-2" />
             Create New Post
           </Button>
@@ -92,7 +96,6 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
 
       <Card className="shadow-sm">
         <CardHeader>
-          {/* Search input removed from here */}
         </CardHeader>
         <CardContent>
           {posts.length === 0 && !isLoading ? (
@@ -132,15 +135,15 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                              <ExternalLink className="w-4 h-4" />
                           </Link>
                        </Button>
-                      <Button variant="ghost" size="icon" asChild title="Edit Post">
+                      <Button variant="ghost" size="icon" asChild title="Edit Post" disabled={isLoadingAuth || !isAdminLoggedIn}>
                           <Link href={`/admin/posts/edit/${post.id}`}>
                              <Edit2 className="w-4 h-4" />
                           </Link>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" title="Delete Post" disabled={isPending || isLoading}>
-                            {isPending || isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
+                          <Button variant="ghost" size="icon" title="Delete Post" disabled={isPending || isLoading || isLoadingAuth || !isAdminLoggedIn}>
+                            {(isPending || isLoading) && !isLoadingAuth ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -151,13 +154,13 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isPending || isLoading}>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel disabled={isPending || isLoading || isLoadingAuth}>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeletePost(post.id, post.title)}
-                              disabled={isPending || isLoading}
+                              disabled={isPending || isLoading || isLoadingAuth || !isAdminLoggedIn}
                               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                             >
-                              {isPending || isLoading ? 'Deleting...' : 'Delete'}
+                              {(isPending || isLoading) && !isLoadingAuth ? 'Deleting...' : 'Delete'}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>

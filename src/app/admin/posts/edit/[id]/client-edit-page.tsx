@@ -21,17 +21,14 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-// import { Progress } from '@/components/ui/progress'; // Not used for local uploads
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Save } from 'lucide-react';
-// import { storage } from '@/lib/firebase-config'; // Not used
-// import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'; // Not used
-// import { useAuth } from '@/contexts/AuthContext'; // Not used
 import { updatePostAction } from '@/app/actions'; 
 import type { Post } from '@/types';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
 
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
@@ -39,8 +36,8 @@ const postFormClientSchema = z.object({
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(150, { message: 'Slug must be 150 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
-  tags: z.string().optional(), // Comma-separated string
-  thumbnailUrl: z.string().optional(), // To hold the existing local path for preview
+  tags: z.string().optional(), 
+  thumbnailUrl: z.string().optional(), 
 });
 
 type PostFormClientValues = z.infer<typeof postFormClientSchema>;
@@ -55,15 +52,13 @@ const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 export default function ClientEditPage({ initialPostData }: ClientEditPageProps) {
   const { toast } = useToast();
   const router = useRouter();
-  // const { user } = useAuth(); // Not used
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
+  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Added from useAuth
 
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null); // For new file upload
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(initialPostData.thumbnailUrl || null); // For new file preview or existing
-  // const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({}); // Not used
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null); 
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(initialPostData.thumbnailUrl || null); 
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
-  // const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false); // Not used
 
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
@@ -76,7 +71,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
       slug: initialPostData.slug || '',
       content: initialPostData.content || '<p>Edit your content...</p>',
       tags: initialPostData.tags ? initialPostData.tags.join(', ') : '',
-      thumbnailUrl: initialPostData.thumbnailUrl || '', // This stores the current path for preview
+      thumbnailUrl: initialPostData.thumbnailUrl || '', 
     },
     mode: 'onChange',
   });
@@ -94,16 +89,15 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         });
       }
       
-      setThumbnailFile(file); // Store the new file object
+      setThumbnailFile(file); 
       
       const reader = new FileReader();
-      reader.onloadend = () => setThumbnailPreview(reader.result as string); // Update preview for the new file
+      reader.onloadend = () => setThumbnailPreview(reader.result as string); 
       reader.readAsDataURL(file);
       
-      // Don't change form.thumbnailUrl here, it's for the existing path or if no new file selected
     } else {
-      setThumbnailFile(null); // No new file selected
-      setThumbnailPreview(initialPostData.thumbnailUrl || null); // Revert preview to existing image
+      setThumbnailFile(null); 
+      setThumbnailPreview(initialPostData.thumbnailUrl || null); 
        if (e.target) { 
             e.target.value = '';
        }
@@ -111,6 +105,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   };
 
   const handleSuggestTags = async () => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({ variant: 'destructive', title: 'Unauthorized', description: 'You do not have permission to suggest tags.' });
+      return;
+    }
     const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
     if (!content || content.trim().length < 50) {
       setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
@@ -157,6 +155,15 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   };
 
   const onSubmit = async (data: PostFormClientValues) => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({
+        variant: 'destructive',
+        title: 'Unauthorized',
+        description: 'You do not have permission to update posts.',
+      });
+      setIsSubmittingForm(false);
+      return;
+    }
     setIsSubmittingForm(true);
         
     const validationResult = await form.trigger();
@@ -176,13 +183,11 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     formData.append('content', data.content);
     formData.append('tags', data.tags || '');
 
-    if (thumbnailFile) { // If a new file was selected
+    if (thumbnailFile) { 
       formData.append('thumbnailFile', thumbnailFile);
     }
-    // The server action will use postId to fetch existing post and handle its current thumbnailUrl
 
     try {
-      // @ts-ignore updatePostAction expects FormData
       const result = await updatePostAction(initialPostData.id, formData); 
       if (result?.success === false) {
          toast({
@@ -206,13 +211,9 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
-        // Don't reset form here, user is redirected by the server action
-        // router.push('/admin/posts'); 
       }
     } catch (error: any) {
-      // Check if it's a Next.js redirect signal
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
-        // This is a redirect, Next.js will handle it. Do not show an error toast.
         return;
       }
       console.error("Error updating post:", error);
@@ -250,7 +251,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -263,7 +264,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title.</FormDescription>
                   <FormMessage />
@@ -279,7 +280,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags}
+                  disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -291,7 +292,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
               <FormDescription>
                 Select a new image to change the thumbnail. It will be uploaded with the post. Current image will be kept if no new image is selected. Use optimized images (under {MAX_THUMBNAIL_SIZE_MB}MB).
               </FormDescription>
-              {/* No direct FormField for thumbnailUrl in terms of error display, as it's implicit */}
             </FormItem>
 
             <FormField
@@ -309,7 +309,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                         field.onChange(content); 
                         form.trigger('content'); 
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -343,7 +343,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags}
+                      disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -352,7 +352,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isLoadingAuth || !isAdminLoggedIn}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -402,10 +402,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isLoadingAuth || !isAdminLoggedIn}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />

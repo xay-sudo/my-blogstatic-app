@@ -31,6 +31,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert'; 
 import { Label } from '@/components/ui/label'; 
+import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
 
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
@@ -49,13 +50,12 @@ const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 interface ScrapedPostData {
   title?: string;
   content?: string;
-  thumbnailUrl?: string; // Original URL from scrape for reference
-  thumbnailDataUri?: string; // Base64 data URI of the image
+  thumbnailUrl?: string; 
+  thumbnailDataUri?: string; 
   error?: string;
   details?: string;
 }
 
-// Helper to convert data URI to File object
 async function dataUriToMimeType(dataUri: string): Promise<string> {
   return dataUri.substring(dataUri.indexOf(':') + 1, dataUri.indexOf(';'));
 }
@@ -73,9 +73,10 @@ export default function NewPostPage() {
   const router = useRouter();
   const editorRef = useRef<any>(null);
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
+  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Added from useAuth
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null); // Can be URL or data URI
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null); 
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
@@ -155,10 +156,9 @@ export default function NewPostPage() {
 
     try {
       const fileName = originalUrl ? originalUrl.substring(originalUrl.lastIndexOf('/') + 1) || 'scraped-thumbnail.png' : 'scraped-thumbnail.png';
-      // Try to infer extension from data URI or filename, default to .png
       const mimeType = dataUri.substring(dataUri.indexOf(':') + 1, dataUri.indexOf(';'));
       let ext = mimeType.split('/')[1] || fileName.split('.').pop() || 'png';
-      if (ext.includes('jpeg')) ext = 'jpg'; // normalize jpeg
+      if (ext.includes('jpeg')) ext = 'jpg'; 
       const finalFileName = `${fileName.split('.').slice(0, -1).join('.') || 'scraped-thumbnail'}-${Date.now()}.${ext}`;
 
       const file = await dataURIToFile(dataUri, finalFileName);
@@ -173,7 +173,7 @@ export default function NewPostPage() {
       }
 
       setThumbnailFile(file);
-      setThumbnailPreview(dataUri); // Preview the data URI directly
+      setThumbnailPreview(dataUri); 
       
       const fileInput = document.getElementById('thumbnail-upload') as HTMLInputElement | null;
       if (fileInput) {
@@ -193,6 +193,10 @@ export default function NewPostPage() {
 
 
   const handleSuggestTags = async () => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({ variant: 'destructive', title: 'Unauthorized', description: 'You do not have permission to suggest tags.' });
+      return;
+    }
     const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
     if (!content || content.trim().length < 50) {
       setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
@@ -239,6 +243,10 @@ export default function NewPostPage() {
   };
 
   const handleFetchContentFromUrl = async () => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({ variant: 'destructive', title: 'Unauthorized', description: 'You do not have permission to fetch content.' });
+      return;
+    }
     if (!scrapeUrl) {
       toast({ variant: "destructive", title: "Error", description: "Please enter a URL to fetch content from." });
       return;
@@ -352,6 +360,15 @@ export default function NewPostPage() {
 
 
   const onSubmit = async (data: PostFormClientValues) => {
+    if (isLoadingAuth || !isAdminLoggedIn) {
+      toast({
+        variant: 'destructive',
+        title: 'Unauthorized',
+        description: 'You do not have permission to create posts.',
+      });
+      setIsSubmittingForm(false);
+      return;
+    }
     setIsSubmittingForm(true);
         
     const validationResult = await form.trigger();
@@ -408,12 +425,9 @@ export default function NewPostPage() {
         if (editorRef.current) {
           editorRef.current.setContent('<p>Write your blog post content here...</p>');
         }
-        // router.push('/admin/posts'); // This line is handled by the redirect in createPostAction
       }
     } catch (error: any) {
-      // Check if it's a Next.js redirect signal
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
-        // This is a redirect, Next.js will handle it. Do not show an error toast.
         return;
       }
       console.error("Error submitting post:", error);
@@ -443,7 +457,6 @@ export default function NewPostPage() {
         <CardDescription>Fill in the details below or import from a URL to publish a new blog post.</CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Scrape from URL Section */}
         <div className="mb-8 p-4 border rounded-lg bg-muted/50">
           <h3 className="text-lg font-semibold mb-3 flex items-center">
             <Link2 className="w-5 h-5 mr-2 text-primary" />
@@ -459,14 +472,14 @@ export default function NewPostPage() {
                   placeholder="https://example.com/blog-post-to-scrape"
                   value={scrapeUrl}
                   onChange={(e) => setScrapeUrl(e.target.value)}
-                  disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}
+                  disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                   className="mt-1"
                 />
               </div>
               <Button 
                 type="button" 
                 onClick={handleFetchContentFromUrl} 
-                disabled={isScraping || isSubmittingForm || !scrapeUrl || isProcessingScrapedThumbnail}
+                disabled={isScraping || isSubmittingForm || !scrapeUrl || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                 className="w-full sm:w-auto"
               >
                 {isScraping ? (
@@ -489,21 +502,20 @@ export default function NewPostPage() {
               </Alert>
             )}
 
-            {/* Placeholder scraping options */}
             <div className="space-y-3 text-sm mt-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2">
                 <Label className="font-medium w-32 shrink-0">Feature Image:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-img-crop" className="font-normal">Crop</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-img-flip" className="font-normal">Flip</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-img-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -512,11 +524,11 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">White Space:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-ws-yes" className="font-normal">Remove</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-ws-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -525,16 +537,16 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">Random Img Order:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-rio-yes" className="font-normal">Yes</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail} />
+                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                     <Label htmlFor="scrape-rio-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
               </div>
-              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}>
+              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}>
                  Set Content Rules (placeholder)
               </Button>
             </div>
@@ -542,7 +554,6 @@ export default function NewPostPage() {
         </div>
         <Separator className="my-6" />
 
-        {/* Existing Post Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -552,7 +563,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -565,7 +576,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
                   <FormMessage />
@@ -581,7 +592,7 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                  disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
@@ -617,7 +628,7 @@ export default function NewPostPage() {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -651,7 +662,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -660,7 +671,7 @@ export default function NewPostPage() {
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping || isProcessingScrapedThumbnail}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -712,10 +723,10 @@ export default function NewPostPage() {
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isLoadingAuth || !isAdminLoggedIn}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
