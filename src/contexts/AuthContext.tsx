@@ -4,53 +4,71 @@
 import type React from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase-config'; // Import Firebase auth instance
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged,
+  type User 
+} from 'firebase/auth';
 
 interface AuthContextType {
+  user: User | null; // Store the Firebase User object
   isAdminLoggedIn: boolean | null; // null when loading, true/false otherwise
-  loginAsAdmin: () => void;
-  logoutAdmin: () => void;
+  signInWithGoogle: () => Promise<void>;
+  logoutAdmin: () => Promise<void>;
+  isLoadingAuth: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'blogstatic_isAdmin';
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true); // Start as true
   const router = useRouter();
 
   useEffect(() => {
-    // Check localStorage on initial client-side load
-    try {
-      const storedIsAdmin = localStorage.getItem(LOCAL_STORAGE_KEY);
-      setIsAdminLoggedIn(storedIsAdmin === 'true');
-    } catch (error) {
-      console.error("Could not access localStorage:", error);
-      setIsAdminLoggedIn(false); // Default to not logged in if localStorage fails
-    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsLoadingAuth(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
-  const loginAsAdmin = useCallback(() => {
+  const signInWithGoogle = useCallback(async () => {
+    setIsLoadingAuth(true);
+    const provider = new GoogleAuthProvider();
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, 'true');
+      await signInWithPopup(auth, provider);
+      // onAuthStateChanged will handle setting the user and redirecting
+      // No need to explicitly set user here, router.push('/admin') can be handled by login page useEffect
     } catch (error) {
-      console.error("Could not set localStorage:", error);
+      console.error("Error signing in with Google:", error);
+      setIsLoadingAuth(false); // Ensure loading is set to false on error
     }
-    setIsAdminLoggedIn(true);
+    // setIsLoadingAuth(false) will be handled by onAuthStateChanged
   }, []);
 
-  const logoutAdmin = useCallback(() => {
+  const logoutAdmin = useCallback(async () => {
+    setIsLoadingAuth(true);
     try {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      await firebaseSignOut(auth);
+      // onAuthStateChanged will handle setting user to null
+      router.push('/'); // Redirect to homepage after logout
     } catch (error) {
-      console.error("Could not remove from localStorage:", error);
+      console.error("Error signing out:", error);
+    } finally {
+        // setIsLoadingAuth(false) will be handled by onAuthStateChanged
     }
-    setIsAdminLoggedIn(false);
-    router.push('/'); // Redirect to homepage after logout
   }, [router]);
 
+  const isAdminLoggedIn = isLoadingAuth ? null : !!user;
+
   return (
-    <AuthContext.Provider value={{ isAdminLoggedIn, loginAsAdmin, logoutAdmin }}>
+    <AuthContext.Provider value={{ user, isAdminLoggedIn, signInWithGoogle, logoutAdmin, isLoadingAuth }}>
       {children}
     </AuthContext.Provider>
   );

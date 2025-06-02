@@ -14,18 +14,17 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdminLoggedIn, logoutAdmin } = useAuth();
+  const { isAdminLoggedIn, logoutAdmin, isLoadingAuth } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     // Redirect if auth state is determined and user is not admin
-    if (isAdminLoggedIn === false) {
+    if (!isLoadingAuth && isAdminLoggedIn === false) {
       router.push('/login');
     }
-  }, [isAdminLoggedIn, router]);
+  }, [isLoadingAuth, isAdminLoggedIn, router]);
 
-  if (isAdminLoggedIn === null) {
-    // Auth state is still loading, show a skeleton or loading message
+  if (isLoadingAuth || isAdminLoggedIn === null) { // Show loading if auth is loading or not yet determined
     return (
       <div className="flex min-h-screen bg-muted/40">
         <aside className="w-60 bg-background border-r p-4 space-y-4 hidden md:flex md:flex-col shadow-sm">
@@ -52,9 +51,7 @@ export default function AdminLayout({
     );
   }
 
-  // If not logged in (and not loading), this content won't be shown due to redirect.
-  // However, returning null prevents rendering children prematurely if redirect is slow.
-  if (isAdminLoggedIn === false) {
+  if (isAdminLoggedIn === false) { // If definitely not logged in, don't render children (redirect will handle it)
     return null;
   }
 
@@ -84,7 +81,7 @@ export default function AdminLayout({
             <span>Manage Posts</span>
           </Link>
         </nav>
-        <Button variant="outline" onClick={() => logoutAdmin()} className="w-full">
+        <Button variant="outline" onClick={logoutAdmin} className="w-full">
           <LogOut className="w-5 h-5 mr-2" />
           Logout
         </Button>
