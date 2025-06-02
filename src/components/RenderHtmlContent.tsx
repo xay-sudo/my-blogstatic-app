@@ -10,39 +10,30 @@ interface RenderHtmlContentProps {
    */
   htmlString: string;
   /**
-   * Optional CSS classes to apply to the wrapper div.
+   * Optional CSS classes to apply to the wrapper div that will contain the HTML.
    */
   className?: string;
-  /**
-   * Optional style to apply to the placeholder to ensure consistent dimensions.
-   */
-  placeholderStyle?: React.CSSProperties;
 }
 
 /**
  * A component to safely render an HTML string, deferring actual content rendering
  * to client-side to avoid hydration mismatches.
  */
-const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString, className = "", placeholderStyle }) => {
+const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString, className = "" }) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) {
-    // Render a placeholder div with the same class/style to maintain layout,
-    // but without the content that causes hydration issues.
-    // This ensures the server and initial client render match.
-    return <div className={className} style={placeholderStyle} />;
+  if (!isMounted || !htmlString) {
+    // If not mounted yet, or if there's no HTML string, render nothing.
+    // This prevents a <div> placeholder from appearing in the <head> or an empty div elsewhere.
+    return null;
   }
 
-  // Only render with dangerouslySetInnerHTML on the client after mounting.
-  // If htmlString is still falsy after mounting, render the placeholder.
-  if (!htmlString) {
-    return <div className={className} style={placeholderStyle} />;
-  }
-
+  // Only render with dangerouslySetInnerHTML on the client after mounting AND if htmlString is present.
+  // The div wrapper is used here to apply any className and to host the dangerouslySetInnerHTML.
   return (
     <div
       className={className}
