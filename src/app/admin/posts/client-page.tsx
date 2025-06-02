@@ -3,11 +3,12 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card'; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
-import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { deletePostAction } from '@/app/actions'; 
 import {
@@ -94,6 +95,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[80px] hidden sm:table-cell">Thumbnail</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead className="hidden sm:table-cell">Date</TableHead>
                   <TableHead className="hidden md:table-cell">Tags</TableHead>
@@ -104,6 +106,22 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
               <TableBody>
                 {posts.map((post) => (
                   <TableRow key={post.id}>
+                    <TableCell className="hidden sm:table-cell">
+                      {post.thumbnailUrl ? (
+                        <Image
+                          src={post.thumbnailUrl}
+                          alt={post.title || 'Post thumbnail'}
+                          width={64}
+                          height={64}
+                          className="rounded object-cover aspect-square"
+                          data-ai-hint="post thumbnail"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-muted rounded flex items-center justify-center">
+                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium max-w-xs truncate">
                       <Link href={`/posts/${post.slug}`} className="hover:underline" target="_blank" title={post.title}>
                         {post.title}
@@ -171,3 +189,4 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
     </>
   );
 }
+
