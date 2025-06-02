@@ -55,21 +55,21 @@ async function handleFileUploadToFirebase(file: File | undefined): Promise<strin
     return downloadURL;
   } catch (error: any) {
     console.error("Firebase Storage Upload Error details:", error);
-    if (error.code) {
-      console.error("Firebase Storage Error Code:", error.code);
-    }
-    if (error.message) {
-      console.error("Firebase Storage Error Message:", error.message);
-    }
-    if (error.serverResponse) {
-      console.error("Firebase Storage Server Response:", error.serverResponse);
-    }
+    // Log all available error properties
+    if (error.code) console.error("Firebase Storage Error Code:", error.code);
+    if (error.message) console.error("Firebase Storage Error Message:", error.message);
+    if (error.serverResponse) console.error("Firebase Storage Server Response:", error.serverResponse); // This is crucial
 
-    const baseMessage = error.message || 'An unknown error occurred during upload.';
+    let baseMessage = error.message || 'An unknown error occurred during upload.';
     // Prevent "Firebase Storage: Firebase Storage:" duplication
     const prefix = baseMessage.startsWith('Firebase Storage:') ? '' : 'Firebase Storage: ';
     
-    const errorMessage = `${prefix}${baseMessage} (Code: ${error.code || 'unknown'}). Please check server logs and Firebase Storage rules.`;
+    // Avoid duplicating the code if it's already in the message
+    const codeString = `(Code: ${error.code || 'unknown'})`;
+    const messageIncludesCode = error.code && baseMessage.includes(`(${error.code})`) && baseMessage.includes(error.code);
+    
+    const errorMessage = `${prefix}${baseMessage}${!messageIncludesCode && error.code ? ` ${codeString}` : ''}. Please check server logs (especially 'Firebase Storage Server Response') and Firebase Storage rules.`;
+    
     throw new Error(errorMessage);
   }
 }
