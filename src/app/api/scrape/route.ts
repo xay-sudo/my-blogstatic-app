@@ -33,22 +33,83 @@ const elementsToRemove = [
   //figcaption, figure > figcaption might be desired, but loose figcaption might be clutter
 ].join(', ');
 
+function cleanTitle(title: string, siteHostname: string): string {
+  if (!title || !siteHostname) {
+    return title;
+  }
+
+  let cleanedTitle = title;
+  const lowerSiteHostname = siteHostname.toLowerCase().replace(/^www\./, '');
+  const commonSeparators = ['|', '-', '–', ':']; // en-dash, em-dash
+
+  // Create regex patterns to remove hostname at the beginning or end, surrounded by optional separators and spaces
+  // Escape special characters in hostname for regex
+  const escapedHostname = lowerSiteHostname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  const patterns = [];
+  for (const sep of commonSeparators) {
+    const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    patterns.push(new RegExp(`^\\s*${escapedHostname}\\s*${escapedSep}\\s*`, 'i')); // Hostname at start
+    patterns.push(new RegExp(`\\s*${escapedSep}\\s*${escapedHostname}\\s*$`, 'i')); // Hostname at end
+  }
+  // Also for hostname at the very beginning or end without explicit separator (less common for titles)
+  patterns.push(new RegExp(`^\\s*${escapedHostname}\\s*`, 'i'));
+  patterns.push(new RegExp(`\\s*${escapedHostname}\\s*$`, 'i'));
+
+
+  for (const pattern of patterns) {
+    cleanedTitle = cleanedTitle.replace(pattern, '');
+  }
+  
+  // Fallback for site name that might be just the first part of the hostname (e.g. 'myblog' from 'myblog.wordpress.com')
+  const siteNameParts = lowerSiteHostname.split('.');
+  if (siteNameParts.length > 1) {
+    const primarySiteName = siteNameParts[0];
+    const escapedPrimarySiteName = primarySiteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+     for (const sep of commonSeparators) {
+        const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        patterns.push(new RegExp(`^\\s*${escapedPrimarySiteName}\\s*${escapedSep}\\s*`, 'i')); 
+        patterns.push(new RegExp(`\\s*${escapedSep}\\s*${escapedPrimarySiteName}\\s*$`, 'i')); 
+    }
+    patterns.push(new RegExp(`^\\s*${escapedPrimarySiteName}\\s*`, 'i'));
+    patterns.push(new RegExp(`\\s*${escapedPrimarySiteName}\\s*$`, 'i'));
+
+    for (const pattern of patterns) {
+        cleanedTitle = cleanedTitle.replace(pattern, '');
+    }
+  }
+
+
+  // Remove leading/trailing common separators that might be left over
+  for (const sep of commonSeparators) {
+     const escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+     cleanedTitle = cleanedTitle.replace(new RegExp(`^\\s*${escapedSep}\\s*`), '');
+     cleanedTitle = cleanedTitle.replace(new RegExp(`\\s*${escapedSep}\\s*$`), '');
+  }
+
+  return cleanedTitle.trim();
+}
+
+
 export async function POST(request: NextRequest) {
+  let requestUrlString: string;
   try {
     const body = await request.json();
-    const url = body.url;
+    requestUrlString = body.url;
 
-    if (!url || typeof url !== 'string') {
+    if (!requestUrlString || typeof requestUrlString !== 'string') {
       return NextResponse.json({ error: 'URL is required and must be a string.' }, { status: 400 });
     }
 
+    // Validate URL format
+    let parsedUrl: URL;
     try {
-      new URL(url);
+      parsedUrl = new URL(requestUrlString);
     } catch (e) {
       return NextResponse.json({ error: 'Invalid URL format.' }, { status: 400 });
     }
     
-    const response = await axios.get(url, {
+    const response = await axios.get(requestUrlString, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -60,13 +121,17 @@ export async function POST(request: NextRequest) {
     const html = response.data;
     const $ = cheerio.load(html);
 
-    const title = 
+    let extractedTitle = 
       $('meta[property="og:title"]').attr('content')?.trim() ||
       $('meta[name="twitter:title"]').attr('content')?.trim() ||
       $('head title').text()?.trim() ||
       $('h1').first().text()?.trim() ||
       $('.post-title').first().text()?.trim() ||
-      $('.entry-title').first().text()?.trim();
+      $('.entry-title').first().text()?.trim() ||
+      'Untitled Post';
+    
+    extractedTitle = cleanTitle(extractedTitle, parsedUrl.hostname);
+
 
     let content = '';
     const contentSelectors = [
@@ -97,9 +162,9 @@ export async function POST(request: NextRequest) {
           let src = img.attr('src');
           if (src && !src.startsWith('http') && !src.startsWith('data:')) {
             try {
-              src = new URL(src, url).href;
+              src = new URL(src, requestUrlString).href;
               img.attr('src', src);
-            } catch (e) { /* console.warn(`Could not resolve relative image URL: ${src} for base ${url}`); */ }
+            } catch (e) { /* console.warn(`Could not resolve relative image URL: ${src} for base ${requestUrlString}`); */ }
           }
           const width = parseInt(img.attr('width') || '0', 10);
           const height = parseInt(img.attr('height') || '0', 10);
@@ -107,7 +172,13 @@ export async function POST(request: NextRequest) {
              img.remove();
           }
         });
-        $contentClone.find('p:empty, div:empty, span:empty').remove();
+        // Remove empty p, div, span tags
+        $contentClone.find('p, div, span').each((i, el) => {
+          const element = $(el);
+          if (element.html()?.trim() === '' && element.children().length === 0 && !element.attr('style')?.includes('background-image')) {
+             element.remove();
+          }
+        });
         content = $contentClone.html() || '';
         if (content.trim().length > 200) break; // Prefer longer content if multiple selectors match
       }
@@ -121,12 +192,18 @@ export async function POST(request: NextRequest) {
             let src = img.attr('src');
             if (src && !src.startsWith('http') && !src.startsWith('data:')) {
               try {
-                src = new URL(src, url).href;
+                src = new URL(src, requestUrlString).href;
                 img.attr('src', src);
               } catch (e) { /* empty */ }
             }
         });
-        $bodyClone.find('p:empty, div:empty, span:empty').remove();
+        // Remove empty p, div, span tags from body fallback
+        $bodyClone.find('p, div, span').each((i, el) => {
+          const element = $(el);
+          if (element.html()?.trim() === '' && element.children().length === 0 && !element.attr('style')?.includes('background-image')) {
+             element.remove();
+          }
+        });
         content = $bodyClone.html() || '';
     }
 
@@ -139,7 +216,7 @@ export async function POST(request: NextRequest) {
 
     if (featuredImageUrl && !featuredImageUrl.startsWith('http') && !featuredImageUrl.startsWith('data:')) {
       try {
-        featuredImageUrl = new URL(featuredImageUrl, url).href;
+        featuredImageUrl = new URL(featuredImageUrl, requestUrlString).href;
       } catch (e) {
         featuredImageUrl = ''; 
       }
@@ -148,7 +225,7 @@ export async function POST(request: NextRequest) {
     content = content.replace(/\n\s*\n/g, '\n').trim();
 
     return NextResponse.json({
-      title: title || 'Untitled Post',
+      title: extractedTitle || 'Untitled Post',
       content: content || '<p>Content could not be extracted or was empty after cleaning.</p>',
       thumbnailUrl: featuredImageUrl || null,
     });
@@ -157,6 +234,7 @@ export async function POST(request: NextRequest) {
     console.error("API Scraping error:", error.message);
     let errorMessage = 'Failed to scrape the URL.';
     let statusCode = 500;
+    let errorDetails = error.message;
 
     if (axios.isAxiosError(error)) {
       if (error.response) {
@@ -171,8 +249,12 @@ export async function POST(request: NextRequest) {
     } else if (error.message.includes('Invalid URL')) {
         errorMessage = 'Invalid URL provided.';
         statusCode = 400;
+    } else {
+      // For other types of errors, use a generic message but keep the original error detail
+      errorDetails = error.message || 'An unexpected error occurred during scraping.';
     }
     
-    return NextResponse.json({ error: errorMessage, details: error.message }, { status: statusCode });
+    return NextResponse.json({ error: errorMessage, details: errorDetails }, { status: statusCode });
   }
 }
+
