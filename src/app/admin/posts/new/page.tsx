@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label';
 
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
-  title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100, { message: 'Title must be 100 characters or less.' }),
+  title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(100, { message: 'Slug must be 100 characters or less.' })
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50, { message: 'Content must be at least 50 characters long (HTML content).' }),
@@ -195,24 +195,29 @@ export default function NewPostPage() {
       });
 
       let responseBodyText: string | null = null; 
+      let isJsonResponse = response.headers.get('content-type')?.includes('application/json');
 
       if (!response.ok) {
         let errorJson;
+        let errorDesc = `Server returned status ${response.status}.`;
         try {
           responseBodyText = await response.text(); 
-          errorJson = JSON.parse(responseBodyText);
+          if (isJsonResponse) {
+            errorJson = JSON.parse(responseBodyText);
+            const errorMsg = errorJson.error || 'Scraping failed.';
+            const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
+            errorDesc = `${errorMsg}${details}`;
+            if (errorJson.error === 'internal') {
+                 errorDesc += ' Please check the Cloud Function logs in Firebase for more details.';
+            }
+          } else {
+             errorDesc += ` Response was not JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
+          }
         } catch (e) {
-          const errorDesc = `Server returned status ${response.status}. The response was not valid JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
-          setScrapingError(errorDesc);
-          toast({ variant: "destructive", title: "Scraping Error", description: errorDesc, duration: 10000 });
-          setIsScraping(false);
-          return;
+          errorDesc += ` Could not parse response. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
         }
-        
-        const errorMsg = errorJson.error || `Scraping failed with status ${response.status}`;
-        const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
-        setScrapingError(`${errorMsg}${details}`);
-        toast({ variant: "destructive", title: "Scraping Error", description: `${errorMsg}${details}`, duration: 8000 });
+        setScrapingError(errorDesc);
+        toast({ variant: "destructive", title: "Scraping Error", description: errorDesc, duration: 10000 });
         setIsScraping(false);
         return;
       }
@@ -220,6 +225,9 @@ export default function NewPostPage() {
       let scrapedData: ScrapedPostData;
       try {
         responseBodyText = await response.text(); 
+        if (!isJsonResponse) {
+          throw new Error("Response was not JSON.");
+        }
         scrapedData = JSON.parse(responseBodyText); 
       } catch (jsonParseError: any) {
         console.error("Failed to parse JSON response from /api/scrape. Status: " + response.status + ". Response body:", responseBodyText);
@@ -231,8 +239,11 @@ export default function NewPostPage() {
       }
       
       if (scrapedData.error) {
-        const errorMsg = scrapedData.error;
+        let errorMsg = scrapedData.error;
         const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
+        if (scrapedData.error === 'internal') {
+          errorMsg += ' Please check the Cloud Function logs in Firebase for more details.';
+        }
         setScrapingError(`${errorMsg}${details}`);
         toast({ variant: "destructive", title: "Scraping Error From API", description: `${errorMsg}${details}`, duration: 8000 });
         setIsScraping(false);
@@ -276,9 +287,9 @@ export default function NewPostPage() {
 
     } catch (error: any) { // Catches network errors or other issues with fetch() itself
       console.error("Error calling /api/scrape:", error);
-      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again.`;
+      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again. If the problem persists, check server logs.`;
       setScrapingError(fullErrorMessageForState);
-      toast({ variant: "destructive", title: "Network or Fetch Error", description: error.message || "An unknown error occurred while trying to fetch content.", duration: 8000 });
+      toast({ variant: "destructive", title: "Network or Fetch Error", description: error.message || "An unknown error occurred while trying to fetch content. Check server logs.", duration: 8000 });
     } finally {
       setIsScraping(false);
     }

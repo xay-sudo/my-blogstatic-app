@@ -16,7 +16,7 @@ const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'
 
 // Schema for text fields from the form
 const postTextFormSchema = z.object({
-  title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(100),
+  title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
   slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
   content: z.string().min(50),
   tags: z.preprocess((val) => {
