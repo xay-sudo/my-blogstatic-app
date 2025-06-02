@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
 import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye } from 'lucide-react';
-// Skeleton removed as auth loading is gone
 import { useToast } from '@/hooks/use-toast';
 import { deletePostAction } from '@/app/actions'; 
 import {
@@ -22,7 +21,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-// useAuth removed
 
 interface AdminPostsClientPageProps {
   initialPosts: Post[];
@@ -33,14 +31,12 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
   const [isLoading, setIsLoading] = useState(false); 
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition(); 
-  // isAdminLoggedIn, isLoadingAuth removed
 
   useEffect(() => {
     setPosts(initialPosts);
   }, [initialPosts]);
 
   const handleDeletePost = async (postId: string, postTitle: string) => {
-    // Authorization check removed
     startTransition(async () => {
       setIsLoading(true); 
       const result = await deletePostAction(postId);
@@ -79,7 +75,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           </p>
         </div>
         <Link href="/admin/posts/new">
-          <Button variant="primary"> {/* disabled state based on auth removed */}
+          <Button variant="primary"> 
             <PlusCircle className="w-5 h-5 mr-2" />
             Create New Post
           </Button>
@@ -134,14 +130,13 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                              <ExternalLink className="w-4 h-4" />
                           </Link>
                        </Button>
-                      <Button variant="ghost" size="icon" asChild title="Edit Post"> {/* disabled state based on auth removed */}
+                      <Button variant="ghost" size="icon" asChild title="Edit Post"> 
                           <Link href={`/admin/posts/edit/${post.id}`}>
                              <Edit2 className="w-4 h-4" />
                           </Link>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           {/* disabled state based on auth removed */}
                           <Button variant="ghost" size="icon" title="Delete Post" disabled={isPending || isLoading}>
                             {(isPending || isLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
                           </Button>
@@ -157,7 +152,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                             <AlertDialogCancel disabled={isPending || isLoading}>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeletePost(post.id, post.title)}
-                              disabled={isPending || isLoading} // disabled state based on auth removed
+                              disabled={isPending || isLoading} 
                               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                             >
                               {(isPending || isLoading) ? 'Deleting...' : 'Delete'}
