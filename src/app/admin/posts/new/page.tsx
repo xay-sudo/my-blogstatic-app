@@ -47,6 +47,8 @@ const postFormSchema = z.object({
 
 type PostFormClientValues = z.infer<typeof postFormSchema>;
 
+const MAX_THUMBNAIL_SIZE_MB = 2;
+const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
 
 export default function NewPostPage() {
   const { toast } = useToast();
@@ -95,6 +97,16 @@ export default function NewPostPage() {
   const handleThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      if (file.size > MAX_THUMBNAIL_SIZE_BYTES) {
+        toast({
+          variant: "default", // Use default or a specific warning variant if you have one
+          title: "Large File Selected",
+          description: `The image "${file.name}" is larger than ${MAX_THUMBNAIL_SIZE_MB}MB. Upload may take a while. Consider optimizing it.`,
+          duration: 5000, // Show for 5 seconds
+        });
+      }
+      
       setThumbnailFile(file); 
       
       const reader = new FileReader();
@@ -364,7 +376,9 @@ export default function NewPostPage() {
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
                 </div>
               )}
-              <FormDescription>Select an image. It will be uploaded automatically. For faster uploads, use optimized images (e.g., under 500KB).</FormDescription>
+              <FormDescription>
+                Select an image. It will be uploaded automatically. For faster uploads, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB).
+              </FormDescription>
               <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> 
             </FormItem>
 
@@ -498,3 +512,4 @@ export default function NewPostPage() {
   );
 }
 
+    
