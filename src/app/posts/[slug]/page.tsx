@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   }
   return {
     title: `${post.title} | Blogstatic`,
-    description: post.content.substring(0, 150).replace(/<[^>]*>?/gm, ''), // Use start of content for description
+    description: post.content.substring(0, 150).replace(/<[^>]*>?/gm, ''), 
   };
 }
 
@@ -58,10 +58,10 @@ export default async function PostPage({ params }: PostPageProps) {
             <time dateTime={post.date}>{formattedDate}</time>
           </div>
         </div>
-        {post.imageUrl && (
+        {post.thumbnailUrl && ( // Display thumbnail if available
           <div className="mt-6 relative w-full h-72 md:h-96 rounded-lg overflow-hidden shadow-md">
             <Image
-              src={post.imageUrl}
+              src={post.thumbnailUrl}
               alt={post.title}
               fill 
               style={{objectFit:"cover"}} 

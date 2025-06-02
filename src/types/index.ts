@@ -5,6 +5,5 @@ export interface Post {
   date: string; // ISO string format
   content: string;
   tags: string[];
-  imageUrl?: string;
   thumbnailUrl?: string;
 }

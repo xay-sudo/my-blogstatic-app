@@ -40,7 +40,6 @@ const postFormSchema = z.object({
   tags: z.string() 
     .transform(val => val ? val.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0) : [])
     .optional(),
-  imageUrl: z.string().url({ message: 'Please upload a valid image or ensure the URL is correct.' }).optional().or(z.literal('')),
   thumbnailUrl: z.string().url({ message: 'Please upload a valid thumbnail or ensure the URL is correct.' }).optional().or(z.literal('')),
 });
 
@@ -55,9 +54,7 @@ export default function NewPostPage() {
   const tinymceApiKey = process.env.NEXT_PUBLIC_TINYMCE_API_KEY;
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [isSubmittingForm, setIsSubmittingForm] = useState(false); 
 
@@ -69,7 +66,6 @@ export default function NewPostPage() {
       slug: '',
       content: '<p>Write your blog post content here...</p>',
       tags: '', 
-      imageUrl: '',
       thumbnailUrl: '',
     },
     mode: 'onChange',
@@ -93,7 +89,7 @@ export default function NewPostPage() {
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: React.Dispatch<React.SetStateAction<File | null>>,
     setPreview: React.Dispatch<React.SetStateAction<string | null>>,
-    urlField: keyof Pick<PostFormClientValues, 'imageUrl' | 'thumbnailUrl'>
+    urlField: keyof Pick<PostFormClientValues, 'thumbnailUrl'> 
   ) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -156,29 +152,21 @@ export default function NewPostPage() {
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
-    let finalData = { ...data }; // Use a mutable copy
+    let finalData = { ...data }; 
 
     try {
       if (thumbnailFile) {
         toast({ title: "Uploading Thumbnail...", description: "Please wait." });
         const uploadedThumbnailUrl = await uploadFile(thumbnailFile, 'posts_images/thumbnails', 'thumbnail');
-        finalData.thumbnailUrl = uploadedThumbnailUrl; // Update the mutable copy
+        finalData.thumbnailUrl = uploadedThumbnailUrl; 
         form.setValue('thumbnailUrl', uploadedThumbnailUrl, {shouldValidate: true}); 
-      }
-      if (mainImageFile) {
-         toast({ title: "Uploading Main Image...", description: "Please wait." });
-        const uploadedImageUrl = await uploadFile(mainImageFile, 'posts_images/main', 'mainImage');
-        finalData.imageUrl = uploadedImageUrl; // Update the mutable copy
-        form.setValue('imageUrl', uploadedImageUrl, {shouldValidate: true});
       }
     } catch (error) {
       setIsSubmittingForm(false);
       setUploadProgress({});
-      // Toast for upload failure is handled in uploadFile
       return; 
     }
     
-    // Re-validate the form after URLs might have been populated by uploads
     const validationResult = await form.trigger(); 
     if (!validationResult) {
         toast({
@@ -190,7 +178,6 @@ export default function NewPostPage() {
         return;
     }
     
-    // Use the latest form values which include uploaded URLs
     const dataForAction = form.getValues();
 
     const processedTags = typeof dataForAction.tags === 'string'
@@ -203,35 +190,31 @@ export default function NewPostPage() {
       slug: dataForAction.slug,
       content: dataForAction.content,
       tags: processedTags,
-      imageUrl: dataForAction.imageUrl,
       thumbnailUrl: dataForAction.thumbnailUrl,
     };
 
     try {
-      const result = await createPostAction(postPayload); // Server action call
-      if (result?.success === false) { // Check if the action returned a specific failure
+      const result = await createPostAction(postPayload); 
+      if (result?.success === false) { 
          toast({
           variant: "destructive",
           title: 'Failed to Create Post',
           description: result.message || 'An unknown error occurred on the server.',
         });
-        // If server action returns specific field errors, apply them to the form
         if (result.errors) {
           Object.entries(result.errors).forEach(([fieldName, errors]) => {
-             // Ensure errors is an array and fieldName is a valid key
              if (Array.isArray(errors) && errors.length > 0) {
                 form.setError(fieldName as keyof PostFormClientValues, { type: 'server', message: errors.join(', ') });
              }
           });
         }
-      } else { // Success case (redirect is handled by server action)
+      } else { 
         toast({
           title: 'Post Created Successfully',
           description: `"${postPayload.title}" has been created.`,
         });
-        // Server action handles revalidation and redirection.
       }
-    } catch (error) { // Catch unexpected errors from the action call itself
+    } catch (error) { 
       console.error("Error submitting post:", error);
       toast({
         variant: "destructive",
@@ -240,7 +223,7 @@ export default function NewPostPage() {
       });
     } finally {
       setIsSubmittingForm(false);
-      setUploadProgress({}); // Reset progress for all uploads
+      setUploadProgress({}); 
     }
   };
 
@@ -338,7 +321,7 @@ export default function NewPostPage() {
                   <FormControl>
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
-                      {...field} // field already includes value and onChange
+                      {...field} 
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -348,7 +331,7 @@ export default function NewPostPage() {
             />
 
             <FormItem>
-              <FormLabel htmlFor="thumbnail-upload">Thumbnail Image (Optional)</FormLabel>
+              <FormLabel htmlFor="thumbnail-upload">Thumbnail Image</FormLabel>
               <FormControl>
                 <Input
                   id="thumbnail-upload"
@@ -363,36 +346,11 @@ export default function NewPostPage() {
               )}
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" />
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="upload preview"/>
                 </div>
               )}
-              <FormDescription>Upload an optional thumbnail image for the post (e.g., 400x300px).</FormDescription>
-              {/* FormMessage for thumbnailUrl can be shown if server validation returns error for this field */}
+              <FormDescription>Upload a thumbnail image for the post (e.g., 400x300px).</FormDescription>
               <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} />
-            </FormItem>
-
-             <FormItem>
-              <FormLabel htmlFor="main-image-upload">Main Post Image</FormLabel>
-              <FormControl>
-                <Input
-                  id="main-image-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileChange(e, setMainImageFile, setMainImagePreview, 'imageUrl')}
-                  className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                />
-              </FormControl>
-              {uploadProgress['mainImage'] > 0 && uploadProgress['mainImage'] < 100 && (
-                <Progress value={uploadProgress['mainImage']} className="w-full mt-2 h-2" />
-              )}
-              {mainImagePreview && (
-                <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={mainImagePreview} alt="Main image preview" width={192} height={192} style={{objectFit:"cover"}} className="rounded"/>
-                </div>
-              )}
-              <FormDescription>Upload an optional main image for the post (e.g., 800x600px).</FormDescription>
-              {/* FormMessage for imageUrl can be shown if server validation returns error for this field */}
-              <FormField control={form.control} name="imageUrl" render={() => <FormMessage />} />
             </FormItem>
             
             <div className="flex justify-end space-x-3 pt-4">
@@ -414,5 +372,3 @@ export default function NewPostPage() {
     </Card>
   );
 }
-
-    

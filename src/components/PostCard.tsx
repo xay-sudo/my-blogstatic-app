@@ -17,7 +17,7 @@ export default function PostCard({ post }: PostCardProps) {
     day: 'numeric',
   });
 
-  const displayImageUrl = post.thumbnailUrl || post.imageUrl;
+  const displayImageUrl = post.thumbnailUrl; // Only use thumbnailUrl
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
@@ -30,7 +30,7 @@ export default function PostCard({ post }: PostCardProps) {
               fill 
               style={{objectFit:"cover"}} 
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
-              data-ai-hint="article content"
+              data-ai-hint="article thumbnail"
             />
           </div>
         </Link>
@@ -47,9 +47,9 @@ export default function PostCard({ post }: PostCardProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        {/* Excerpt removed */}
+        {/* Content preview can be added here if needed */}
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-4 pt-4"> {/* Added pt-4 for spacing */}
+      <CardFooter className="flex flex-col items-start gap-4 pt-4"> 
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {post.tags.map((tag) => (

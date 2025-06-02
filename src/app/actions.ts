@@ -13,7 +13,6 @@ const postFormSchema = z.object({
   slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   content: z.string().min(50),
   tags: z.array(z.string()).optional().default([]), 
-  imageUrl: z.string().url().optional().or(z.literal('')),
   thumbnailUrl: z.string().url().optional().or(z.literal('')),
 });
 
