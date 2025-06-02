@@ -4,10 +4,10 @@
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card'; // CardTitle, CardDescription removed as they are in parent
+import { Card, CardContent, CardHeader } from '@/components/ui/card'; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
-import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2 } from 'lucide-react'; 
+import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2, Eye } from 'lucide-react'; // Added Eye icon
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { deletePostAction } from '@/app/actions'; 
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from '@/contexts/AuthContext'; // Added useAuth
+import { useAuth } from '@/contexts/AuthContext'; 
 
 interface AdminPostsClientPageProps {
   initialPosts: Post[];
@@ -33,7 +33,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
   const [isLoading, setIsLoading] = useState(false); 
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition(); 
-  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); // Added from useAuth
+  const { isAdminLoggedIn, isLoadingAuth } = useAuth(); 
 
   useEffect(() => {
     setPosts(initialPosts);
@@ -109,6 +109,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                   <TableHead>Title</TableHead>
                   <TableHead className="hidden sm:table-cell">Date</TableHead>
                   <TableHead className="hidden md:table-cell">Tags</TableHead>
+                  <TableHead className="hidden lg:table-cell text-center">Views</TableHead> 
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -128,6 +129,12 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                         </span>
                       ))}
                       {post.tags.length > 3 ? '...' : ''}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-center">
+                      <div className="flex items-center justify-center">
+                        <Eye className="w-4 h-4 mr-1 text-muted-foreground" />
+                        {post.viewCount ?? 0}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right space-x-1">
                        <Button variant="ghost" size="icon" asChild title="View Post">

@@ -4,9 +4,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import { CalendarDays } from 'lucide-react';
-import PostCard from '@/components/PostCard'; // Import PostCard
-import type { Post } from '@/types'; // Import Post type
+import { CalendarDays, Eye } from 'lucide-react'; // Added Eye icon
+import PostCard from '@/components/PostCard'; 
+import type { Post } from '@/types'; 
 
 interface PostPageProps {
   params: {
@@ -41,6 +41,10 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
+  // Increment view count - this happens on the server when the page is requested.
+  // The current view won't see the immediate increment, but subsequent views will.
+  await postService.incrementViewCount(post.id);
+
   const formattedDate = new Date(post.date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -69,10 +73,14 @@ export default async function PostPage({ params }: PostPageProps) {
           <h1 className="font-headline text-4xl md:text-5xl font-bold text-primary mb-4 break-words">
             {post.title}
           </h1>
-          <div className="text-muted-foreground flex items-center space-x-4">
+          <div className="text-muted-foreground flex items-center space-x-4 text-sm">
             <div className="flex items-center">
-              <CalendarDays className="w-5 h-5 mr-2" />
+              <CalendarDays className="w-4 h-4 mr-1.5" />
               <time dateTime={post.date}>{formattedDate}</time>
+            </div>
+            <div className="flex items-center">
+              <Eye className="w-4 h-4 mr-1.5" />
+              <span>{post.viewCount ?? 0} views</span>
             </div>
           </div>
           {post.thumbnailUrl && (

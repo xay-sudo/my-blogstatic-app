@@ -7,6 +7,7 @@ export interface Post {
   content: string;
   tags: string[];
   thumbnailUrl?: string;
+  viewCount?: number; // Added view count
 }
 
 export interface SiteSettings {

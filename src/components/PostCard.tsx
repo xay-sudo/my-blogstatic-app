@@ -4,7 +4,7 @@ import Image from 'next/image';
 import type { Post } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import TagBadge from './TagBadge';
-import { CalendarDays, ArrowRight } from 'lucide-react';
+import { CalendarDays, ArrowRight, Eye } from 'lucide-react'; // Added Eye icon
 
 interface PostCardProps {
   post: Post;
@@ -17,7 +17,7 @@ export default function PostCard({ post }: PostCardProps) {
     day: 'numeric',
   });
 
-  const displayImageUrl = post.thumbnailUrl; // Only use thumbnailUrl
+  const displayImageUrl = post.thumbnailUrl; 
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
@@ -41,9 +41,15 @@ export default function PostCard({ post }: PostCardProps) {
             {post.title}
           </CardTitle>
         </Link>
-        <div className="text-sm text-muted-foreground flex items-center mt-2">
-          <CalendarDays className="w-4 h-4 mr-2" />
-          <time dateTime={post.date}>{formattedDate}</time>
+        <div className="text-sm text-muted-foreground flex items-center mt-2 space-x-3">
+          <div className="flex items-center">
+            <CalendarDays className="w-4 h-4 mr-1.5" />
+            <time dateTime={post.date}>{formattedDate}</time>
+          </div>
+          <div className="flex items-center">
+            <Eye className="w-4 h-4 mr-1.5" />
+            <span>{post.viewCount ?? 0}</span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
