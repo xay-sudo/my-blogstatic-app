@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search as SearchIcon, Loader2 } from 'lucide-react';
+import { Search as SearchIcon } from 'lucide-react'; // Loader2 removed as it's not used here
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -17,10 +17,18 @@ export default function SearchBarClient({ initialSearchTerm = '' }: SearchBarCli
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      // When the component is mounted (meaning it's visible), focus the input.
+      inputRef.current?.focus();
+    }
+  }, [mounted]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
@@ -42,23 +50,23 @@ export default function SearchBarClient({ initialSearchTerm = '' }: SearchBarCli
     // Render a placeholder or skeleton while not mounted
     return (
       <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-md items-center space-x-2" aria-busy="true" aria-live="polite">
-        <Skeleton className="h-10 flex-grow" />
-        <Skeleton className="h-10 w-10" />
+        <Skeleton className="h-10 flex-grow bg-muted/50" />
+        <Skeleton className="h-10 w-10 bg-muted/50" />
         <span className="sr-only">Loading search bar...</span>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-md items-center space-x-2">
+    <form onSubmit={handleSubmit} className="flex w-full max-w-xs sm:max-w-sm md:max-w-md items-center space-x-2">
       <Input
+        ref={inputRef}
         type="text"
         placeholder="Search posts..."
         value={searchTerm}
         onChange={handleInputChange}
-        // Rely on base Input's text-foreground for theme-aware color.
-        // Add only specific transition and focus styles here.
         className="flex-grow 
+                   text-foreground bg-background placeholder:text-muted-foreground
                    transition-all duration-300 ease-in-out 
                    focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background
                    focus:border-primary focus:shadow-lg"
