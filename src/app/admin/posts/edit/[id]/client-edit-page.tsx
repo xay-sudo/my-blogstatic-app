@@ -28,7 +28,10 @@ import { updatePostAction } from '@/app/actions';
 import type { Post } from '@/types';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { suggestTitles } from '@/ai/flows/suggest-titles';
+import { suggestImageAltText } from '@/ai/flows/suggest-image-alt-text';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+
 
 const postFormClientSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
@@ -65,6 +68,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const [suggestedAiTitles, setSuggestedAiTitles] = useState<string[]>([]);
   const [isSuggestingTitles, setIsSuggestingTitles] = useState(false);
   const [aiTitlesError, setAiTitlesError] = useState<string | null>(null);
+  
+  const [suggestedAiAltText, setSuggestedAiAltText] = useState<string | null>(null);
+  const [isSuggestingAltText, setIsSuggestingAltText] = useState(false);
+  const [aiAltTextError, setAiAltTextError] = useState<string | null>(null);
 
 
   const form = useForm<PostFormClientValues>({
@@ -80,6 +87,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   });
 
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSuggestedAiAltText(null); 
+    setAiAltTextError(null);
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
 
@@ -201,6 +210,45 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     setSuggestedAiTitles([]); 
   };
 
+  const handleSuggestAltText = async () => {
+    if (!thumbnailPreview) {
+      toast({
+        variant: "destructive",
+        title: "No Thumbnail",
+        description: "Please select or upload a thumbnail image first.",
+      });
+      return;
+    }
+     // Ensure thumbnailPreview is a data URI for AI processing
+    if (!thumbnailPreview.startsWith('data:image')) {
+      toast({
+        variant: "destructive",
+        title: "Image Not Processed for AI",
+        description: "Alt text suggestion requires the image to be in a processed format (Data URI). Please upload a new image if you just set a URL.",
+      });
+      return;
+    }
+
+    setIsSuggestingAltText(true);
+    setAiAltTextError(null);
+    setSuggestedAiAltText(null);
+    try {
+      const result = await suggestImageAltText({ imageDataUri: thumbnailPreview });
+      if (result.altText) {
+        setSuggestedAiAltText(result.altText);
+        toast({ title: "AI Alt Text Suggested!", description: "Review the suggestion below." });
+      } else {
+        toast({ title: "AI Alt Text", description: "AI did not suggest any alt text for this image." });
+      }
+    } catch (e) {
+      console.error('Error suggesting alt text:', e);
+      setAiAltTextError('Failed to suggest alt text. Please try again.');
+      toast({ variant: "destructive", title: "AI Alt Text Error", description: 'Could not fetch AI alt text suggestion.' });
+    } finally {
+      setIsSuggestingAltText(false);
+    }
+  };
+
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
@@ -219,7 +267,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     let finalTags = data.tags ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0) : [];
     const contentForAi = editorRef.current ? editorRef.current.getContent({format: 'text'}) : data.content;
 
-    // Suggest tags on save only if no manual suggestions were made or if they were cleared
     if (contentForAi && contentForAi.trim().length >= 50 && suggestedAiTags.length === 0 && !aiTagsError) {
       try {
         toast({title: "Checking for AI Tags...", description: "Please wait while tags are being generated for the content."});
@@ -280,11 +327,12 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
-        // Reset AI suggestions for next potential edit session or interaction
         setSuggestedAiTags([]);
         setAiTagsError(null);
         setSuggestedAiTitles([]);
         setAiTitlesError(null);
+        setSuggestedAiAltText(null);
+        setAiAltTextError(null);
       }
     } catch (error: any) {
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
@@ -303,7 +351,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     }
   };
   
-  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isSuggestingTitles;
+  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isSuggestingTitles || isSuggestingAltText;
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg">
@@ -411,8 +459,55 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 />
               </FormControl>
               {thumbnailPreview && (
-                <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
+                 <div className="mt-2 space-y-3">
+                  <div className="p-2 border rounded-md inline-block relative group">
+                    <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview image" />
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSuggestAltText}
+                      disabled={isSuggestingAltText || allSuggestionsDisabled || !thumbnailPreview.startsWith('data:image')}
+                      className="text-xs"
+                    >
+                      {isSuggestingAltText ? (
+                        <>
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Alt Text...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          Suggest Alt Text for Thumbnail
+                        </>
+                      )}
+                    </Button>
+                    {aiAltTextError && (
+                      <div className="text-destructive flex items-center text-xs mt-1">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiAltTextError}
+                      </div>
+                    )}
+                    {suggestedAiAltText && (
+                      <div className="mt-2 max-w-md">
+                        <Label htmlFor="suggested-alt-text-edit" className="text-xs font-medium text-muted-foreground">AI Suggested Alt Text (copy if needed):</Label>
+                        <Input
+                          id="suggested-alt-text-edit"
+                          type="text"
+                          value={suggestedAiAltText}
+                          readOnly
+                          className="mt-1 text-xs bg-muted/50 h-auto py-1.5"
+                          onClick={(e) => e.currentTarget.select()}
+                        />
+                      </div>
+                    )}
+                     {!thumbnailPreview.startsWith('data:image') && (
+                      <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                        Alt text suggestion requires a processed image (Data URI). If this is an existing image URL, upload it again or select a new one to enable this feature.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
               <FormDescription>

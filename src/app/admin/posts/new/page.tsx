@@ -27,6 +27,7 @@ import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, Downlo
 import { createPostAction } from '@/app/actions';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { suggestTitles } from '@/ai/flows/suggest-titles';
+import { suggestImageAltText } from '@/ai/flows/suggest-image-alt-text';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
@@ -85,6 +86,10 @@ export default function NewPostPage() {
   const [isSuggestingTitles, setIsSuggestingTitles] = useState(false);
   const [aiTitlesError, setAiTitlesError] = useState<string | null>(null);
 
+  const [suggestedAiAltText, setSuggestedAiAltText] = useState<string | null>(null);
+  const [isSuggestingAltText, setIsSuggestingAltText] = useState(false);
+  const [aiAltTextError, setAiAltTextError] = useState<string | null>(null);
+
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingError, setScrapingError] = useState<string | null>(null);
@@ -118,6 +123,8 @@ export default function NewPostPage() {
   }, [watchedTitle, form]);
 
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSuggestedAiAltText(null); // Reset AI alt text when image changes
+    setAiAltTextError(null);
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
 
@@ -147,6 +154,8 @@ export default function NewPostPage() {
   };
 
   const autoProcessScrapedThumbnail = async (dataUri: string | undefined, originalUrl?: string) => {
+    setSuggestedAiAltText(null); 
+    setAiAltTextError(null);
     if (!dataUri) {
       setThumbnailPreview(originalUrl ? `https://placehold.co/200x200.png?text=No+Valid+Img` : `https://placehold.co/200x200.png?text=No+Img+Found`);
       toast({ title: "No Usable Thumbnail", description: "A featured image could not be processed from the URL. You can manually upload one.", duration: 7000 });
@@ -279,7 +288,45 @@ export default function NewPostPage() {
 
   const applyAiTitle = (title: string) => {
     form.setValue('title', title, { shouldValidate: true, shouldDirty: true });
-    setSuggestedAiTitles([]); // Clear suggestions after one is chosen
+    setSuggestedAiTitles([]); 
+  };
+
+  const handleSuggestAltText = async () => {
+    if (!thumbnailPreview) {
+      toast({
+        variant: "destructive",
+        title: "No Thumbnail",
+        description: "Please select or scrape a thumbnail image first.",
+      });
+      return;
+    }
+    if (!thumbnailPreview.startsWith('data:image')) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Image Data",
+        description: "Cannot suggest alt text for non-data URI images. This might happen if the preview is an external URL that hasn't been processed.",
+      });
+      return;
+    }
+
+    setIsSuggestingAltText(true);
+    setAiAltTextError(null);
+    setSuggestedAiAltText(null);
+    try {
+      const result = await suggestImageAltText({ imageDataUri: thumbnailPreview });
+      if (result.altText) {
+        setSuggestedAiAltText(result.altText);
+        toast({ title: "AI Alt Text Suggested!", description: "Review the suggestion below." });
+      } else {
+        toast({ title: "AI Alt Text", description: "AI did not suggest any alt text for this image." });
+      }
+    } catch (e) {
+      console.error('Error suggesting alt text:', e);
+      setAiAltTextError('Failed to suggest alt text. Please try again.');
+      toast({ variant: "destructive", title: "AI Alt Text Error", description: 'Could not fetch AI alt text suggestion.' });
+    } finally {
+      setIsSuggestingAltText(false);
+    }
   };
 
 
@@ -296,6 +343,8 @@ export default function NewPostPage() {
     setAiTagsError(null);
     setSuggestedAiTitles([]);
     setAiTitlesError(null);
+    setSuggestedAiAltText(null);
+    setAiAltTextError(null);
 
 
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
@@ -386,20 +435,24 @@ export default function NewPostPage() {
         }
       }
 
-      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Review and adjust. AI tag suggestions will follow." });
+      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Review and adjust. AI suggestions will follow." });
 
       await autoProcessScrapedThumbnail(scrapedData.thumbnailDataUri, scrapedData.thumbnailUrl);
 
-      // Use the content from the editor after it's been set, for plaintext extraction by AI
       const contentForAiAfterScrape = editorRef.current ? editorRef.current.getContent({ format: 'text' }) : scrapedData.content;
       if (contentForAiAfterScrape && contentForAiAfterScrape.trim().length >= 50) {
         await handleSuggestTags(contentForAiAfterScrape);
-        await handleSuggestTitles(); // Also suggest titles
+        await handleSuggestTitles(); 
+        if (thumbnailPreview && thumbnailPreview.startsWith('data:image')) { // Check if thumbnailPreview got set by autoProcess
+            await handleSuggestAltText();
+        }
       } else if (scrapedData.content) {
         setAiTagsError('Scraped content is too short (less than 50 characters) for effective AI tag suggestions.');
         setSuggestedAiTags([]);
         setAiTitlesError('Scraped content is too short (less than 50 characters) for effective AI title suggestions.');
         setSuggestedAiTitles([]);
+        setAiAltTextError('Scraped content might be too short or image not suitable for alt text.');
+        setSuggestedAiAltText(null);
       }
 
     } catch (error: any) {
@@ -434,7 +487,7 @@ export default function NewPostPage() {
     if (contentForAi && contentForAi.trim().length >= 50) {
       try {
         toast({title: "Generating AI Tags...", description: "Please wait while tags are being generated for the content."});
-        setIsSuggestingTags(true); // Reuse for loading state visual
+        setIsSuggestingTags(true); 
         const aiResult = await suggestTags({ blogPostContent: contentForAi });
         setIsSuggestingTags(false);
         const newAiTags = aiResult.tags.filter(tag => !finalTags.includes(tag.toLowerCase()));
@@ -457,7 +510,7 @@ export default function NewPostPage() {
     formData.append('title', data.title);
     formData.append('slug', data.slug);
     formData.append('content', data.content);
-    formData.append('tags', Array.from(new Set(finalTags)).join(', ')); // Ensure unique tags and join
+    formData.append('tags', Array.from(new Set(finalTags)).join(', ')); 
 
     if (thumbnailFile) {
       formData.append('thumbnailFile', thumbnailFile);
@@ -490,6 +543,8 @@ export default function NewPostPage() {
         setAiTagsError(null);
         setSuggestedAiTitles([]);
         setAiTitlesError(null);
+        setSuggestedAiAltText(null);
+        setAiAltTextError(null);
         setScrapeUrl('');
         const thumbnailUploadInput = document.getElementById('thumbnail-upload') as HTMLInputElement;
         if (thumbnailUploadInput) {
@@ -517,7 +572,7 @@ export default function NewPostPage() {
   };
 
 
-  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isSuggestingTitles;
+  const allSuggestionsDisabled = isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail || isSuggestingTitles || isSuggestingAltText;
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg">
@@ -726,13 +781,60 @@ export default function NewPostPage() {
                 />
               </FormControl>
               {thumbnailPreview && (
-                <div className="mt-2 p-2 border rounded-md inline-block relative group">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
-                   {isProcessingScrapedThumbnail && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-                      <Loader2Icon className="w-6 h-6 text-white animate-spin" />
-                    </div>
-                  )}
+                <div className="mt-2 space-y-3">
+                  <div className="p-2 border rounded-md inline-block relative group">
+                    <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview image" />
+                    {isProcessingScrapedThumbnail && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+                        <Loader2Icon className="w-6 h-6 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSuggestAltText}
+                      disabled={isSuggestingAltText || allSuggestionsDisabled || !thumbnailPreview.startsWith('data:image')}
+                      className="text-xs"
+                    >
+                      {isSuggestingAltText ? (
+                        <>
+                          <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Suggesting Alt Text...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          Suggest Alt Text for Thumbnail
+                        </>
+                      )}
+                    </Button>
+                    {aiAltTextError && (
+                      <div className="text-destructive flex items-center text-xs mt-1">
+                        <AlertCircle className="w-3 h-3 mr-1" /> {aiAltTextError}
+                      </div>
+                    )}
+                    {suggestedAiAltText && (
+                      <div className="mt-2 max-w-md">
+                        <Label htmlFor="suggested-alt-text" className="text-xs font-medium text-muted-foreground">AI Suggested Alt Text (copy if needed):</Label>
+                        <Input
+                          id="suggested-alt-text"
+                          type="text"
+                          value={suggestedAiAltText}
+                          readOnly
+                          className="mt-1 text-xs bg-muted/50 h-auto py-1.5"
+                          onClick={(e) => e.currentTarget.select()}
+                        />
+                      </div>
+                    )}
+                    {!thumbnailPreview.startsWith('data:image') && !isProcessingScrapedThumbnail &&(
+                      <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                        Alt text suggestion requires the image to be fully processed (available as a Data URI). If this image was scraped, it might still be loading or failed to process. Try uploading directly if issues persist.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
               <ShadcnFormDescription>
