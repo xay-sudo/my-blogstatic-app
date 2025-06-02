@@ -3,17 +3,15 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-// ShieldCheck import was unused, can be removed if not needed elsewhere
-// import { ShieldCheck } from 'lucide-react';
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { Suspense } from 'react';
+import React, { Suspense, useCallback } from 'react'; // Added useCallback
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
-  isAdminLoggedIn?: boolean; // Added prop to indicate admin login status
+  isAdminLoggedIn?: boolean;
 }
 
 function SearchBarFallback() {
@@ -27,7 +25,7 @@ function SearchBarFallback() {
 }
 
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
-  const renderHeaderAdSlot = () => {
+  const renderHeaderAdSlot = useCallback(() => {
     if (isAdminLoggedIn) {
       return (
         <div
@@ -106,7 +104,7 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
         Header Ad (728x90) - Check Config
       </div>
     );
-  };
+  }, [isAdminLoggedIn, siteSettings]);
 
   return (
     <>
