@@ -32,6 +32,8 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert'; 
 import { Label } from '@/components/ui/label'; 
 
+import { app } from '@/lib/firebase-config'; // Import Firebase app instance
+import { getFunctions, httpsCallable, HttpsCallableResult } from 'firebase/functions'; // Import Firebase Functions
 
 // Client-side schema for immediate validation of text fields
 const postFormClientSchema = z.object({
@@ -46,6 +48,13 @@ type PostFormClientValues = z.infer<typeof postFormClientSchema>;
 
 const MAX_THUMBNAIL_SIZE_MB = 5;
 const MAX_THUMBNAIL_SIZE_BYTES = MAX_THUMBNAIL_SIZE_MB * 1024 * 1024;
+
+interface ScrapedPostData {
+  title?: string;
+  content?: string;
+  thumbnailUrl?: string;
+  // Add other fields your Cloud Function might return
+}
 
 export default function NewPostPage() {
   const { toast } = useToast();
@@ -173,84 +182,55 @@ export default function NewPostPage() {
     }
     setIsScraping(true);
     setScrapingError(null);
+    setThumbnailFile(null); // Clear any manually selected file
+    setThumbnailPreview(null); // Clear preview
   
-    // --- Placeholder for Firebase Cloud Function Call ---
-    // In a real implementation, you would call your Firebase Cloud Function here.
-    // This requires setting up Firebase SDK for functions if not already done.
-    // Example:
-    // try {
-    //   // Ensure you have Firebase initialized and functions imported:
-    //   // import { getFunctions, httpsCallable } from 'firebase/functions';
-    //   // import { app } from '@/lib/firebase-config'; // Your Firebase app instance
-    //   // const functions = getFunctions(app);
-    //   // const scrapePostFunction = httpsCallable(functions, 'yourScrapeFunctionName'); // Replace 'yourScrapeFunctionName'
-    //   
-    //   // const result = await scrapePostFunction({ url: scrapeUrl });
-    //   // const scrapedData = result.data as { title?: string; content?: string; slug?: string; thumbnailUrl?: string /* and other fields */ };
-    //   
-    //   // if (scrapedData.title) form.setValue('title', scrapedData.title);
-    //   // if (scrapedData.content) {
-    //   //   form.setValue('content', scrapedData.content);
-    //   //   if (editorRef.current) editorRef.current.setContent(scrapedData.content);
-    //   // }
-    //   // if (scrapedData.slug) form.setValue('slug', scrapedData.slug);
-    //   // else if (scrapedData.title) { /* auto-generate slug from title if no slug provided */ }
-    //   
-    //   // if (scrapedData.thumbnailUrl) {
-    //   //    setThumbnailPreview(scrapedData.thumbnailUrl); 
-    //   //    // To actually use it as the uploaded file for local storage, you'd need to fetch it as a blob,
-    //   //    // then create a File object and setThumbnailFile. This is an advanced step.
-    //   //    // For Firebase Storage, you might just store this URL.
-    //   //    toast({ title: "Thumbnail Info", description: "A thumbnail URL was found. Review and select manually if needed."});
-    //   // }
-    //   
-    //   // toast({ title: "Content Fetched", description: "Form fields populated. Please review." });
-    // } catch (error: any) {
-    //   // console.error("Error scraping content:", error);
-    //   // setScrapingError(error.message || "Failed to scrape content from URL.");
-    //   // toast({ variant: "destructive", title: "Scraping Error", description: error.message || "Could not fetch content." });
-    // } finally {
-    //   // setIsScraping(false);
-    // }
-    // --- End Placeholder ---
-  
-    // Simulated delay and response for UI demonstration:
-    toast({ title: "Fetching Content (Simulated)", description: "This is a simulation. Implement your Cloud Function call." });
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    let host;
+    if (!app) {
+      const errorMsg = "Firebase app is not initialized. Cannot call Cloud Function.";
+      console.error(errorMsg);
+      setScrapingError(errorMsg);
+      toast({ variant: "destructive", title: "Initialization Error", description: errorMsg });
+      setIsScraping(false);
+      return;
+    }
+
     try {
-      host = new URL(scrapeUrl).hostname;
-    } catch (e) {
-      host = "source";
-    }
+      const functions = getFunctions(app);
+      const scrapePostFunction = httpsCallable< { url: string }, ScrapedPostData >(functions, 'scrapePost');
+      
+      toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
-    const simulatedScrapedData = {
-      title: `Simulated Title from ${host}`,
-      content: `<p>This is <strong>simulated content</strong> scraped from the URL: ${scrapeUrl}.</p><p>It includes some basic HTML structure like paragraphs, lists, and maybe an image if your actual scraper finds one.</p><h2>A Subheading</h2><p>More details would appear here, parsed from the article body of the source page.</p><ul><li>List item 1</li><li>List item 2</li></ul><p><em>Remember to replace this simulation with a real call to your Firebase Cloud Function that performs the actual scraping.</em></p>`,
-      thumbnailUrl: `https://placehold.co/600x400.png?text=Scraped+Image+from+${host}`, // Simulate a found thumbnail
-    };
+      const result: HttpsCallableResult<ScrapedPostData> = await scrapePostFunction({ url: scrapeUrl });
+      const scrapedData = result.data;
+      
+      if (scrapedData.title) {
+        form.setValue('title', scrapedData.title, { shouldValidate: true, shouldDirty: true });
+      }
+      if (scrapedData.content) {
+        form.setValue('content', scrapedData.content, { shouldValidate: true, shouldDirty: true });
+        if (editorRef.current) {
+          editorRef.current.setContent(scrapedData.content);
+        }
+      }
+      
+      if (scrapedData.thumbnailUrl) {
+        setThumbnailPreview(scrapedData.thumbnailUrl);
+        toast({ 
+          title: "Thumbnail Previewed", 
+          description: "A thumbnail was found and is previewed. To use it, please download it and re-upload it via the 'Thumbnail Image' field below, or select another image. The previewed image will not be saved automatically.",
+          duration: 10000 // Longer duration for this important message
+        });
+      }
   
-    form.setValue('title', simulatedScrapedData.title, { shouldValidate: true, shouldDirty: true });
-    // The watchedTitle useEffect should auto-update the slug.
-    form.setValue('content', simulatedScrapedData.content, { shouldValidate: true, shouldDirty: true });
-    if (editorRef.current) {
-      editorRef.current.setContent(simulatedScrapedData.content);
+      toast({ title: "Content Populated", description: "Form fields have been populated from the URL. Please review and adjust as needed." });
+    } catch (error: any) {
+      console.error("Error scraping content via Cloud Function:", error);
+      const errorMessage = error.message || "Failed to scrape content from URL. The server might have blocked the request or the URL might be invalid.";
+      setScrapingError(errorMessage);
+      toast({ variant: "destructive", title: "Scraping Error", description: errorMessage });
+    } finally {
+      setIsScraping(false);
     }
-    
-    // Simulate setting the thumbnail preview from the scraped data
-    if (simulatedScrapedData.thumbnailUrl) {
-        setThumbnailPreview(simulatedScrapedData.thumbnailUrl);
-        // Note: This only sets the preview. For the image to be saved with the post,
-        // your actual implementation would need to:
-        // 1. If storing locally: Fetch this scraped thumbnailUrl as a Blob, create a File object, and set `thumbnailFile`.
-        // 2. Or, if your backend Cloud Function already uploaded it to Firebase/local storage and returned a usable path/URL,
-        //    you might store that path directly.
-        // For now, user still needs to manually select a file if they want this previewed image to be uploaded.
-    }
-
-    toast({ title: "Content Populated (Simulated)", description: "Form fields have been filled with simulated data. Please review and adjust as needed." });
-    setIsScraping(false);
   };
 
 
@@ -277,10 +257,6 @@ export default function NewPostPage() {
     if (thumbnailFile) {
       formData.append('thumbnailFile', thumbnailFile);
     }
-    // If thumbnailPreview is set from scraping but thumbnailFile is null,
-    // the server action needs to be aware that it might need to fetch the previewed URL
-    // or the user has to manually select a file. Current action expects `thumbnailFile`.
-
 
     try {
       const result = await createPostAction(formData); 
@@ -493,7 +469,7 @@ export default function NewPostPage() {
                 </div>
               )}
               <FormDescription>
-                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB). If importing from URL, you may need to save and re-upload the suggested image if you wish to use it.
+                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB). If a thumbnail was previewed from a URL import, you must still manually select and upload it (or another image) here if you wish to save it.
               </FormDescription>
             </FormItem>
 
