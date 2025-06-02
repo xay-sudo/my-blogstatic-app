@@ -105,7 +105,7 @@ export default function NewPostPage() {
             </Link>
           </Button>
         </div>
-        <CardDescription>Fill in the details below to publish a new blog post. For production use with TinyMCE, obtain an API key from tiny.cloud.</CardDescription>
+        <CardDescription>Fill in the details below to publish a new blog post.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -158,7 +158,7 @@ export default function NewPostPage() {
                   <FormLabel>Content</FormLabel>
                   <FormControl>
                     <Editor
-                      apiKey="no-api-key"
+                      apiKey="fhz6kca5oz1s8icmehxt7tz2m4l3xz37vcei0tqa1dorl6tk"
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
@@ -179,7 +179,7 @@ export default function NewPostPage() {
                         content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:16px }',
                         skin: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oxide-dark' : 'oxide'),
                         content_css: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'),
-                        readonly: false, // Explicitly set editor to be writable
+                        readonly: false,
                       }}
                     />
                   </FormControl>
@@ -234,3 +234,4 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
