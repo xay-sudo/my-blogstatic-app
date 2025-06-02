@@ -81,29 +81,47 @@ const siteSettingsFormSchema = z.object({
       });
     }
   }
-  // If either adminUsername or adminPassword is provided, both must be provided.
+  
   const usernameProvided = data.adminUsername && data.adminUsername.trim().length > 0;
-  const passwordProvided = data.adminPassword && data.adminPassword.length > 0;
-
-  // Only require new password if username is set and different from initial, or if username is set and initially there was no password.
+  const passwordFieldHasInput = data.adminPassword && data.adminPassword.length > 0;
   const initialUsername = initialSettings?.adminUsername || '';
-  const initialPasswordExists = !!initialSettings?.adminPassword;
+  const initialPasswordExists = !!initialSettings?.adminPassword && initialSettings.adminPassword.length > 0;
 
   if (usernameProvided) {
-    if (!passwordProvided) { // If password field is empty
-      // If username has changed OR if there was no password initially, then password is required
-      if (data.adminUsername !== initialUsername || !initialPasswordExists) {
-         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Password is required if username is set or changed.",
-            path: ['adminPassword'],
+    // Scenario 1: Username is newly set (was empty) OR username has changed.
+    // In this case, a new password MUST be provided.
+    if (initialUsername === '' || data.adminUsername !== initialUsername) {
+      if (!passwordFieldHasInput) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A new password is required when setting or changing the username.",
+          path: ['adminPassword'],
         });
       }
     }
-  } else if (passwordProvided) { // Password provided but username is empty
+    // Scenario 2: Username is the same as initial, and a password was initially set.
+    // In this case, if the password field is empty, it means "keep current password".
+    // If password field has input, it means "update password".
+    // No Zod issue here if password field is empty.
+    else if (data.adminUsername === initialUsername && initialPasswordExists) {
+        // If new password provided, it must meet length criteria (handled by individual field Zod rule)
+    }
+    // Scenario 3: Username is the same as initial, but no password was initially set (e.g. fresh setup).
+    // In this case, a new password must be provided.
+    else if (data.adminUsername === initialUsername && !initialPasswordExists) {
+        if (!passwordFieldHasInput) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Password is required when setting up admin access for the first time.",
+                path: ['adminPassword'],
+            });
+        }
+    }
+  } else if (passwordFieldHasInput && !usernameProvided) { 
+    // If password is provided but username is cleared/empty, this is an error.
      ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Username is required if password is set.",
+      message: "Username is required if a password is set or being entered.",
       path: ['adminUsername'],
     });
   }
@@ -115,10 +133,10 @@ interface ClientSettingsPageProps {
   initialSettings: SiteSettings;
 }
 
-let initialSettings: SiteSettings | null = null; // Store initial settings globally for refiner
+let initialSettings: SiteSettings | null = null; 
 
 export default function ClientSettingsPage({ initialSettings: propsInitialSettings }: ClientSettingsPageProps) {
-  initialSettings = propsInitialSettings; // Set the global initial settings
+  initialSettings = propsInitialSettings; 
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
@@ -136,13 +154,13 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       bannerImageAltText: propsInitialSettings?.bannerImageAltText || CLIENT_DEFAULT_SETTINGS.bannerImageAltText,
       bannerCustomHtml: propsInitialSettings?.bannerCustomHtml || CLIENT_DEFAULT_SETTINGS.bannerCustomHtml,
       adminUsername: propsInitialSettings?.adminUsername || CLIENT_DEFAULT_SETTINGS.adminUsername,
-      adminPassword: '', // Always start empty for password field for security
+      adminPassword: '', 
     },
     mode: 'onChange',
   });
   
   useEffect(() => {
-    initialSettings = propsInitialSettings; // Ensure global `initialSettings` is up-to-date for the refiner
+    initialSettings = propsInitialSettings; 
     form.reset({
       siteTitle: propsInitialSettings?.siteTitle || CLIENT_DEFAULT_SETTINGS.siteTitle,
       siteDescription: propsInitialSettings?.siteDescription || CLIENT_DEFAULT_SETTINGS.siteDescription,
@@ -161,10 +179,18 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const watchedBannerType = form.watch('bannerType');
   const watchedBannerEnabled = form.watch('bannerEnabled');
   const watchedAdminUsername = form.watch('adminUsername');
-  const watchedAdminPassword = form.watch('adminPassword'); // Watch the password field
+  const watchedAdminPassword = form.watch('adminPassword');
 
-  const isSaveButtonDisabled = isSubmitting || 
-    (!form.formState.isDirty && (!watchedAdminPassword || watchedAdminPassword.length === 0));
+  const generalSettingFields: (keyof SiteSettingsFormValues)[] = [
+    'siteTitle', 'siteDescription', 'postsPerPage', 
+    'bannerEnabled', 'bannerType', 'bannerImageUrl', 
+    'bannerImageLink', 'bannerImageAltText', 'bannerCustomHtml'
+  ];
+  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]);
+  const isAdminSettingsDirty = form.formState.dirtyFields.adminUsername || (watchedAdminPassword && watchedAdminPassword.length > 0);
+
+  const isGeneralSaveDisabled = isSubmitting || !isGeneralSettingsDirty;
+  const isAdminSaveDisabled = isSubmitting || !isAdminSettingsDirty;
 
 
   const onSubmit = async (data: SiteSettingsFormValues) => {
@@ -182,20 +208,12 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('bannerCustomHtml', data.bannerCustomHtml || '');
     formData.append('adminUsername', data.adminUsername || '');
 
-    // Only include adminPassword in formData if it's explicitly provided by the user
-    // OR if the username hasn't changed AND an initial password existed (meaning we're keeping the old one by submitting blank)
     if (data.adminPassword && data.adminPassword.length > 0) {
       formData.append('adminPassword', data.adminPassword);
     } else if (data.adminUsername && propsInitialSettings.adminUsername === data.adminUsername && propsInitialSettings.adminPassword) {
-       // If username is same and initial password existed, an empty password field means keep old one.
-       // The action.ts will handle this by not updating password if this field is empty in this scenario.
-       // So, we can just send the empty string, or not append at all. For clarity, sending empty.
        formData.append('adminPassword', ''); 
     } else {
-       // If username is new, or username changed and no new password provided, action.ts will handle validation.
-       // For new username with no password, it's an error handled by Zod.
-       // If username changed and password field is blank, it's an error.
-       formData.append('adminPassword', data.adminPassword || ''); // send what's there (empty or not)
+       formData.append('adminPassword', data.adminPassword || ''); 
     }
 
 
@@ -207,12 +225,32 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
           description: 'Site settings have been saved successfully.',
         });
         router.refresh(); 
-        // Update initialSettings with the newly saved data (excluding password for form reset)
-        initialSettings = { 
-          ...propsInitialSettings, 
-          ...data, 
-          adminPassword: propsInitialSettings.adminPassword // Keep current known password for next validation cycle if not changed
-        }; 
+        
+        const newInitialSettings = { ...propsInitialSettings, ...data };
+        if (!data.adminPassword || data.adminPassword.length === 0) {
+          // If password field was empty and username didn't change (and old pass existed), retain old password conceptually
+          if (propsInitialSettings.adminUsername === data.adminUsername && propsInitialSettings.adminPassword) {
+             newInitialSettings.adminPassword = propsInitialSettings.adminPassword;
+          } else {
+            // If username changed or was new, and password was set, it's in `data.adminPassword` (though we reset field to '')
+            // If password was truly cleared (e.g. admin account removed), then newInitialSettings.adminPassword will be ''
+            // This logic is tricky because form.reset clears the field.
+            // The key is what `initialSettings` global holds for next Zod validation.
+          }
+        }
+        initialSettings = {
+           ...propsInitialSettings, // Start with original props
+           ...data, // Overlay with submitted data
+           // Critical: for password, if data.adminPassword is EMPTY, it doesn't mean we cleared it in the DB
+           // IF the username was NOT changed and an initial password EXISTED.
+           // In this case, the server action would keep the old password.
+           // So, initialSettings for the *next* validation round should reflect that.
+           adminPassword: (data.adminPassword && data.adminPassword.length > 0) 
+                          ? data.adminPassword // It was changed
+                          : (data.adminUsername === propsInitialSettings.adminUsername && propsInitialSettings.adminPassword)
+                            ? propsInitialSettings.adminPassword // It was intentionally kept by submitting blank
+                            : '' // It was cleared or never set
+        };
         form.reset({ ...data, adminPassword: '' }); 
       } else {
         let toastDescription = result?.message || 'An unknown error occurred.';
@@ -371,16 +409,24 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                       )}
                       {watchedBannerType === 'customHtml' && (
                         <div className="space-y-4 p-4 border rounded-md bg-muted/30">
-                          <FormField control={form.control} name="bannerCustomHtml" render={({ field }) => (<FormItem><FormLabel>Custom HTML Code</FormLabel><FormControl><Textarea placeholder="<div>Your ad script...</div>" {...field} rows={6} disabled={isSubmitting} /></FormControl><FormDescription>Paste your ad code. Ensure it's valid.</FormDescription><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="bannerCustomHtml" render={({ field }) => (<FormItem><FormLabel>Custom HTML Code</FormLabel><FormControl><Textarea placeholder="&lt;div&gt;Your ad script...&lt;/div&gt;" {...field} rows={6} disabled={isSubmitting} /></FormControl><FormDescription>Paste your ad code. Ensure it's valid.</FormDescription><FormMessage /></FormItem>)} />
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled}>
+                    {isSubmitting ? (
+                      <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4 mr-2" />Save General Settings</>
+                    )}
+                  </Button>
+                </div>
               </TabsContent>
 
               <TabsContent value="admin_access" className="space-y-6">
-                {/* Admin Credentials Settings */}
                 <div>
                   <h3 className="text-lg font-medium mb-1">Admin Credentials</h3>
                   <p className="text-sm text-muted-foreground mb-4">Set or update the local admin username and password.</p>
@@ -438,24 +484,20 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                     </Alert>
                   )}
                 </div>
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" variant="primary" disabled={isAdminSaveDisabled}>
+                    {isSubmitting ? (
+                      <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4 mr-2" />Save Admin Access</>
+                    )}
+                  </Button>
+                </div>
               </TabsContent>
             </Tabs>
-            
-            <div className="flex justify-end pt-4">
-              <Button type="submit" variant="primary" disabled={isSaveButtonDisabled}>
-                {isSubmitting ? (
-                  <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
-                ) : (
-                   <><Save className="w-4 h-4 mr-2" />Save Settings</>
-                )}
-              </Button>
-            </div>
           </form>
         </Form>
       </CardContent>
     </Card>
   );
 }
-
-
-    
