@@ -24,6 +24,9 @@ function SearchBarFallback() {
   );
 }
 
+// Define placeholder style as a constant for stable reference
+const customHtmlPlaceholderStyle = { width: '728px', height: '90px', minHeight: '90px' };
+
 export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
   const renderHeaderAdSlot = useCallback(() => {
     if (isAdminLoggedIn && siteSettings && siteSettings.bannerEnabled) {
@@ -80,8 +83,8 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       return (
         <RenderHtmlContent
           htmlString={siteSettings.bannerCustomHtml}
-          className="w-full max-w-[728px] h-[90px]" // Removed flex items-center justify-center
-          placeholderStyle={{ width: '728px', height: '90px', minHeight: '90px' }}
+          className="w-full max-w-[728px] h-[90px]"
+          placeholderStyle={customHtmlPlaceholderStyle} // Use the constant
         />
       );
     }

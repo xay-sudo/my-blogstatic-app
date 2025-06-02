@@ -23,7 +23,7 @@ interface RenderHtmlContentProps {
  * A component to safely render an HTML string, deferring actual content rendering
  * to client-side to avoid hydration mismatches.
  */
-const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString, className, placeholderStyle }) => {
+const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString, className = "", placeholderStyle }) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
