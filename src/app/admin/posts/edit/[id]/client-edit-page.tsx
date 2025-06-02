@@ -80,17 +80,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     mode: 'onChange',
   });
 
-  // Slug auto-update based on title (only if slug is not dirty or not explicitly changed by user)
-  // For edit, we might not want to auto-update slug as aggressively if it already exists.
-  // This effect is more suited for new post creation. For edit, user can manually change slug if needed.
-  // const watchedTitle = form.watch('title');
-  // useEffect(() => {
-  //   if (watchedTitle && form.formState.dirtyFields.title && !form.formState.dirtyFields.slug) {
-  //     const newSlug = watchedTitle.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-');
-  //     form.setValue('slug', newSlug, { shouldValidate: true });
-  //   }
-  // }, [watchedTitle, form]);
-
   const handleThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -121,11 +110,15 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         setIsUploadingThumbnail(false);
       }
     } else {
+      // If no file is selected, keep the existing thumbnail URL unless explicitly cleared elsewhere.
+      // This logic assumes user might cancel file selection and wants to keep current thumbnail.
+      if (!form.getValues('thumbnailUrl') && initialPostData.thumbnailUrl) {
+         form.setValue('thumbnailUrl', initialPostData.thumbnailUrl, { shouldValidate: true });
+         setThumbnailPreview(initialPostData.thumbnailUrl);
+      } else if (!form.getValues('thumbnailUrl')) { // If both form value and initial are empty
+         setThumbnailPreview(null);
+      }
       setThumbnailFile(null);
-      // If no file is selected, but there was an initial URL, keep it unless user explicitly clears it.
-      // For now, if selection is cancelled, it might clear. Consider behavior.
-      // setThumbnailPreview(initialPostData.thumbnailUrl || null);
-      // form.setValue('thumbnailUrl', initialPostData.thumbnailUrl || '', { shouldValidate: true });
     }
   };
 
@@ -247,7 +240,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     };
 
     try {
-      // Use updatePostAction here
       const result = await updatePostAction(initialPostData.id, postPayload); 
       if (result?.success === false) {
          toast({
@@ -352,7 +344,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
                 </div>
               )}
-              <FormDescription>Select a new image to change the thumbnail. It will be uploaded automatically.</FormDescription>
+              <FormDescription>Select a new image to change the thumbnail. It will be uploaded automatically. For faster uploads, use optimized images (e.g., under 500KB).</FormDescription>
               <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> 
             </FormItem>
 
@@ -366,10 +358,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Editor
                       apiKey={tinymceApiKey || 'no-api-key'}
                       onInit={(_evt, editor) => editorRef.current = editor}
-                      initialValue={field.value} // Use field.value for controlled component
+                      initialValue={field.value} 
                       onEditorChange={(content, _editor) => {
-                        field.onChange(content); // Update RHF's state
-                        form.trigger('content'); // Optionally trigger validation
+                        field.onChange(content); 
+                        form.trigger('content'); 
                       }}
                       disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
                       init={{
@@ -405,7 +397,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      // value={field.value || ''} // Ensure value is a string for input
                       disabled={isSubmittingForm || isUploadingThumbnail || isSuggestingTags}
                     />
                   </FormControl>
@@ -488,5 +479,3 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     </Card>
   );
 }
-
-    

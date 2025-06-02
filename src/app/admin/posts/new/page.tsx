@@ -364,7 +364,7 @@ export default function NewPostPage() {
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
                 </div>
               )}
-              <FormDescription>Select an image. It will be uploaded automatically (e.g., 400x300px).</FormDescription>
+              <FormDescription>Select an image. It will be uploaded automatically. For faster uploads, use optimized images (e.g., under 500KB).</FormDescription>
               <FormField control={form.control} name="thumbnailUrl" render={() => <FormMessage />} /> 
             </FormItem>
 
@@ -498,5 +498,3 @@ export default function NewPostPage() {
   );
 }
 
-
-    
