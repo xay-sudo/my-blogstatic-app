@@ -39,7 +39,7 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !supabaseUrl.startsWith('http')) {
+  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !isValidHttpUrl(supabaseUrl)) {
     throw new Error(
       `CRITICAL: NEXT_PUBLIC_SUPABASE_URL is not defined, is a placeholder, or is invalid for admin client. Please check environment variables. Current value: "${supabaseUrl}"`
     );
@@ -70,7 +70,7 @@ async function seedInitialSettingsFromJson() {
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.warn('Could not check site_settings in DB for seeding:', JSON.stringify(fetchError, null, 2));
-      initialSettingsDataLoaded = true;
+      initialSettingsDataLoaded = true; // Mark as loaded to prevent repeated attempts if DB is misconfigured
       return;
     }
 
@@ -123,8 +123,12 @@ export async function getSettings(): Promise<SiteSettings> {
     if (errorIsLikelyEmpty) {
       console.error(
         'Error fetching settings from Supabase: Received an empty error object. ' +
-        'This often indicates a problem with Supabase client initialization (check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables) ' +
-        'or a network connectivity issue to Supabase. Raw error object:', error
+        'This often indicates: ' +
+        '1. A problem with Supabase client initialization (check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables, ensuring they are correctly set in BOTH local .env and Vercel/hosting). ' +
+        '2. A network connectivity issue to Supabase. ' +
+        '3. Incorrect Row Level Security (RLS) policies on the "site_settings" table (ensure "anon" role has SELECT permission, and that RLS is enabled for the table if policies are defined). ' +
+        '4. The "site_settings" table might not exist or not have a row with id=1. ' +
+        'Raw error object:', error
       );
     } else {
       const errorDetails = {
@@ -134,17 +138,16 @@ export async function getSettings(): Promise<SiteSettings> {
         hint: (error as any).hint,
         fullErrorObject: JSON.stringify(error, null, 2)
       };
-      console.error('Error fetching settings from Supabase:', errorDetails); // This is line 125
+      console.error('Error fetching settings from Supabase:', errorDetails);
     }
 
-    if ((error as any).code !== 'PGRST116') { // PGRST116 means no rows found, which is acceptable for initial state.
+    if ((error as any).code !== 'PGRST116') { 
         return { ...DEFAULT_SETTINGS_OBJ };
     }
   }
 
 
   if (!data || !data.settings) {
-    // This case handles when PGRST116 occurred (no settings row found) or if data/settings is null for other reasons
     return { ...DEFAULT_SETTINGS_OBJ };
   }
 
