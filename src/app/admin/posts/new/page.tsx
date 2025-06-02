@@ -13,14 +13,14 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
+  FormDescription as ShadcnFormDescription, // Renamed to avoid conflict
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription as CardDescriptionShadCN, CardHeader, CardTitle } from '@/components/ui/card'; // Renamed CardDescription to avoid conflict
+import { Card, CardContent, CardDescription as ShadcnCardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Save } from 'lucide-react';
@@ -29,7 +29,7 @@ import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription as AlertDescriptionShadCN } from '@/components/ui/alert'; // Renamed AlertDescription to avoid conflict
+import { Alert, AlertDescription as ShadcnAlertDescription } from '@/components/ui/alert'; // Renamed to avoid conflict
 import { Label } from '@/components/ui/label';
 
 const postFormClientSchema = z.object({
@@ -143,7 +143,7 @@ export default function NewPostPage() {
 
   const autoProcessScrapedThumbnail = async (dataUri: string | undefined, originalUrl?: string) => {
     if (!dataUri) {
-      setThumbnailPreview(originalUrl ? `https://placehold.co/128x128.png?text=No+Valid+Img` : `https://placehold.co/128x128.png?text=No+Img+Found`);
+      setThumbnailPreview(originalUrl ? `https://placehold.co/200x200.png?text=No+Valid+Img` : `https://placehold.co/200x200.png?text=No+Img+Found`);
       toast({ title: "No Usable Thumbnail", description: "A featured image could not be processed from the URL. You can manually upload one.", duration: 7000 });
       return;
     }
@@ -181,7 +181,7 @@ export default function NewPostPage() {
     } catch (error: any) {
       console.error("Error auto-processing scraped thumbnail data URI:", error);
       setThumbnailFile(null);
-      setThumbnailPreview(`https://placehold.co/128x128.png?text=Process+Failed`);
+      setThumbnailPreview(`https://placehold.co/200x200.png?text=Process+Failed`);
       toast({ variant: "destructive", title: "Auto Thumbnail Process Failed", description: `Could not automatically use the scraped image data: ${error.message}. Please upload one manually.` });
     } finally {
       setIsProcessingScrapedThumbnail(false);
@@ -476,7 +476,7 @@ export default function NewPostPage() {
             </Link>
           </Button>
         </div>
-        <CardDescriptionShadCN>Fill in the details below or import from a URL to publish a new blog post.</CardDescriptionShadCN>
+        <ShadcnCardDescription>Fill in the details below or import from a URL to publish a new blog post.</ShadcnCardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-8 p-4 border rounded-lg bg-muted/50">
@@ -497,7 +497,7 @@ export default function NewPostPage() {
                   disabled={isScraping || isSubmittingForm || isProcessingScrapedThumbnail}
                   className="mt-1"
                 />
-                 <p className="text-sm text-muted-foreground mt-1 text-xs">
+                 <p className="text-xs text-muted-foreground mt-1">
                   Enter a URL to attempt to scrape content. Works best with simple article pages.
                   Many sites have protections that may prevent successful scraping.
                 </p>
@@ -524,7 +524,7 @@ export default function NewPostPage() {
             {scrapingError && (
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescriptionShadCN>{scrapingError}</AlertDescriptionShadCN>
+                <ShadcnAlertDescription>{scrapingError}</ShadcnAlertDescription>
               </Alert>
             )}
 
@@ -604,7 +604,7 @@ export default function NewPostPage() {
                   <FormControl>
                     <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}/>
                   </FormControl>
-                  <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
+                  <ShadcnFormDescription>URL-friendly version of the title (auto-updated).</ShadcnFormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -624,7 +624,7 @@ export default function NewPostPage() {
               </FormControl>
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block relative group">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
                    {isProcessingScrapedThumbnail && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
                       <Loader2Icon className="w-6 h-6 text-white animate-spin" />
@@ -632,10 +632,10 @@ export default function NewPostPage() {
                   )}
                 </div>
               )}
-              <FormDescription>
+              <ShadcnFormDescription>
                 If content was imported, an attempt was made to use the scraped image.
                 You can override it by selecting a different file. Use optimized images (under {MAX_THUMBNAIL_SIZE_MB}MB).
-              </FormDescription>
+              </ShadcnFormDescription>
             </FormItem>
 
             <FormField
@@ -673,7 +673,7 @@ export default function NewPostPage() {
                       }}
                     />
                   </FormControl>
-                  <FormDescription>The main body of your post. Use the rich text editor for formatting.</FormDescription>
+                  <ShadcnFormDescription>The main body of your post. Use the rich text editor for formatting.</ShadcnFormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -691,7 +691,7 @@ export default function NewPostPage() {
                       disabled={isSubmittingForm || isSuggestingTags || isScraping || isProcessingScrapedThumbnail}
                     />
                   </FormControl>
-                  <FormDescription>Comma-separated tags. AI will also attempt to add tags on save.</FormDescription>
+                  <ShadcnFormDescription>Comma-separated tags. AI will also attempt to add tags on save.</ShadcnFormDescription>
                   <FormMessage />
                   {/* Restored UI for AI tag suggestions after scraping */}
                   <div className="mt-3 space-y-2">

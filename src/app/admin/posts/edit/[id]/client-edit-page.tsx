@@ -57,9 +57,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(initialPostData.thumbnailUrl || null); 
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
-  const [suggestedAiTags, setSuggestedAiTags] = useState<string[]>([]);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
-  const [aiTagsError, setAiTagsError] = useState<string | null>(null);
+
 
   const form = useForm<PostFormClientValues>({
     resolver: zodResolver(postFormClientSchema),
@@ -101,51 +100,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
     }
   };
 
-  const handleSuggestTags = async () => {
-    const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
-    if (!content || content.trim().length < 50) {
-      setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
-      setSuggestedAiTags([]);
-      return;
-    }
-    setIsSuggestingTags(true);
-    setAiTagsError(null);
-    setSuggestedAiTags([]);
-    try {
-      const result = await suggestTags({ blogPostContent: content });
-      const currentTagsString = form.getValues('tags') || '';
-      const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-      const newSuggestions = result.tags.filter(tag => !currentTagsArray.includes(tag.toLowerCase()));
-      setSuggestedAiTags(Array.from(new Set(newSuggestions)));
-      if (newSuggestions.length === 0 && result.tags.length > 0) {
-        toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
-      } else if (newSuggestions.length === 0) {
-        toast({ title: "AI Suggestions", description: "No new tags suggested."});
-      }
-    } catch (e) {
-      console.error('Error suggesting tags:', e);
-      setAiTagsError('Failed to suggest tags. Please try again.');
-    } finally {
-      setIsSuggestingTags(false);
-    }
-  };
-
-  const addAiTagToForm = (tagToAdd: string) => {
-    const currentTagsString = form.getValues('tags') || '';
-    const currentTagsArray = currentTagsString.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-    
-    const tagToAddLower = tagToAdd.toLowerCase();
-    if (!currentTagsArray.includes(tagToAddLower)) {
-      const newTagsString = currentTagsArray.length > 0 ? currentTagsArray.join(', ') + ', ' + tagToAddLower : tagToAddLower;
-      form.setValue('tags', newTagsString, { shouldValidate: true, shouldDirty: true });
-      setSuggestedAiTags(prev => prev.filter(t => t.toLowerCase() !== tagToAddLower));
-    } else {
-      toast({
-        title: "Tag exists",
-        description: `The tag "${tagToAdd}" is already in your list.`
-      })
-    }
-  };
 
   const onSubmit = async (data: PostFormClientValues) => {
     setIsSubmittingForm(true);
@@ -160,12 +114,37 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         setIsSubmittingForm(false);
         return;
     }
+
+    let finalTags = data.tags ? data.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0) : [];
+    const contentForAi = editorRef.current ? editorRef.current.getContent({format: 'text'}) : data.content;
+
+    if (contentForAi && contentForAi.trim().length >= 50) {
+      try {
+        toast({title: "Generating AI Tags...", description: "Please wait while tags are being generated for the content."});
+        setIsSuggestingTags(true);
+        const aiResult = await suggestTags({ blogPostContent: contentForAi });
+        setIsSuggestingTags(false);
+        const newAiTags = aiResult.tags.filter(tag => !finalTags.includes(tag.toLowerCase()));
+        if (newAiTags.length > 0) {
+          finalTags = [...finalTags, ...newAiTags.map(t => t.toLowerCase())];
+           toast({title: "AI Tags Added", description: `${newAiTags.length} new AI tags were automatically added.`});
+        } else if (aiResult.tags.length > 0) {
+          toast({title: "AI Tags Checked", description: "AI suggestions were already covered by manual tags or no new unique tags found."});
+        } else {
+           toast({title: "AI Tags", description: "No specific tags suggested by AI for this content."});
+        }
+      } catch (e) {
+        console.error('Error suggesting tags during save:', e);
+        toast({variant: "destructive", title: "AI Tagging Failed on Save", description: "Could not generate AI tags automatically. Post will be saved with manual tags only."});
+        setIsSuggestingTags(false);
+      }
+    }
     
     const formData = new FormData();
     formData.append('title', data.title);
     formData.append('slug', data.slug);
     formData.append('content', data.content);
-    formData.append('tags', data.tags || '');
+    formData.append('tags', Array.from(new Set(finalTags)).join(', '));
 
     if (thumbnailFile) { 
       formData.append('thumbnailFile', thumbnailFile);
@@ -195,16 +174,10 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         if (thumbnailUploadInput) {
           thumbnailUploadInput.value = '';
         }
-        // Optionally, trigger a refresh or redirect if needed, but current logic redirects from action.
-        // router.refresh(); // or router.push('/admin/posts'); if not handled by action's redirect
       }
     } catch (error: any) {
-      // If the error is a redirect error from Next.js, we don't want to show a toast.
-      // The redirect will handle navigation.
       if (typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
-        // This is a redirect error, let Next.js handle it.
-        // setIsSubmittingForm(false); // Can be set here but might be too late
-        throw error; // Re-throw the redirect error
+        throw error; 
       }
       console.error("Error updating post:", error);
       toast({
@@ -213,7 +186,6 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
         description: error instanceof Error ? error.message : 'An unexpected error occurred during submission.',
       });
     } finally {
-      // Only set to false if not a redirect error, as redirect will unmount component
        if (!(typeof (Error as any).digest === 'string' && (Error as any).digest.startsWith('NEXT_REDIRECT'))) {
          setIsSubmittingForm(false);
        }
@@ -279,7 +251,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
               </FormControl>
               {thumbnailPreview && (
                 <div className="mt-2 p-2 border rounded-md inline-block">
-                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
+                  <Image src={thumbnailPreview} alt="Thumbnail preview" width={200} height={200} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview"/>
                 </div>
               )}
               <FormDescription>
@@ -339,57 +311,8 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                       disabled={isSubmittingForm || isSuggestingTags}
                     />
                   </FormControl>
-                  <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
+                  <FormDescription>Comma-separated tags. AI will also attempt to add relevant tags on save.</FormDescription>
                   <FormMessage />
-                  <div className="mt-3 space-y-2">
-                    <Button 
-                      type="button" 
-                      onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 }
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center"
-                    >
-                      {isSuggestingTags ? (
-                        <>
-                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                          Suggesting Tags...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2 text-primary" />
-                          Suggest Tags with AI
-                        </>
-                      )}
-                    </Button>
-                    {aiTagsError && (
-                      <div className="text-destructive flex items-center text-sm">
-                        <AlertCircle className="w-4 h-4 mr-2" /> {aiTagsError}
-                      </div>
-                    )}
-                    {suggestedAiTags.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium mb-1 text-muted-foreground">Click to add:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {suggestedAiTags.map((tag) => (
-                            <Badge
-                              key={tag}
-                              variant="secondary"
-                              onClick={() => addAiTagToForm(tag)}
-                              className="cursor-pointer hover:bg-primary/20 text-xs"
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
-                        <p className="text-xs text-muted-foreground">
-                          Write some content (at least 50 characters) and click the button above to get tag suggestions.
-                        </p>
-                      )}
-                  </div>
                 </FormItem>
               )}
             />
@@ -399,7 +322,7 @@ export default function ClientEditPage({ initialPostData }: ClientEditPageProps)
                 Cancel
               </Button>
               <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags}>
-                {isSubmittingForm ? (
+                {isSubmittingForm || (isSuggestingTags && isSubmittingForm) ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Saving Changes...
