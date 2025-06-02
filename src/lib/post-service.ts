@@ -280,10 +280,10 @@ export const deletePostById = async (postId: string): Promise<void> => {
   }
 };
 
-export const incrementViewCount = async (postId: string): Promise<void> => {
+export const incrementViewCount = async (postId: string): Promise<number | null> => {
   if (!postId) {
     console.warn('[ViewCounter] Attempted to increment view count with no postId. This is a bug in the calling code.');
-    return;
+    return null;
   }
 
   let adminSupabase: SupabaseClient;
@@ -299,27 +299,36 @@ export const incrementViewCount = async (postId: string): Promise<void> => {
       `DETAILS: ${e.message || 'Unknown error during admin client initialization.'}\n` +
       `!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`
     );
-    return; 
+    return null; 
   }
 
-  const { error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
+  // The RPC function is expected to return the new view_count
+  const { data, error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
 
   if (error) {
     console.warn(
         `[ViewCounter] Supabase RPC error while incrementing view count for postId '${postId}'.\n` +
         `This might be due to several reasons:\n` +
-        `  1. The SQL function 'increment_post_view_count' might be missing or misconfigured in your Supabase project.\n` +
+        `  1. The SQL function 'increment_post_view_count' might be missing, misconfigured, or not returning the new count.\n` +
         `     - Ensure it exists (check your Supabase SQL Editor > Functions).\n` +
-        `     - Verify it correctly handles NULL initial values (e.g., using COALESCE(view_count, 0) + 1).\n` +
+        `     - Verify it correctly handles NULL initial values (e.g., using COALESCE(view_count, 0) + 1) and has 'RETURNS integer'.\n` +
+        `     - Confirm it uses 'RETURNING view_count INTO new_view_count;' and 'RETURN new_view_count;'.\n` +
         `     - Confirm it's defined with 'SECURITY DEFINER' if RLS could be an issue.\n` +
         `  2. The 'posts' table might be missing the 'view_count' column, or it's not of a numeric type.\n`+
         `  3. There could be network issues or temporary Supabase service problems.\n` +
         `  4. Incorrect RLS policies if SECURITY DEFINER is not used on the SQL function, though service_role should bypass RLS.\n` +
         `To help debug, here's the raw Supabase error: ${JSON.stringify(error, null, 2)}`
     );
+    return null;
   } else {
-    // Successfully called RPC. You can uncomment the log below for successful calls if needed for debugging.
-    // console.log(`[ViewCounter] Successfully called RPC to increment view count for postId: ${postId}`);
+    // console.log(`[ViewCounter] Successfully called RPC. Returned data: ${JSON.stringify(data)} for postId: ${postId}`);
+    // The data returned by the RPC function (if it returns a single value) is directly in `data`.
+    if (typeof data === 'number') {
+      return data;
+    } else {
+      console.warn(`[ViewCounter] RPC 'increment_post_view_count' for postId '${postId}' did not return a number as expected. Returned: ${JSON.stringify(data)}`);
+      return null;
+    }
   }
 };
 
@@ -327,3 +336,4 @@ export const incrementViewCount = async (postId: string): Promise<void> => {
 if (typeof window === 'undefined') {
   // Seeding is deferred to the first data access call
 }
+

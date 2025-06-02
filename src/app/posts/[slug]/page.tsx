@@ -35,15 +35,21 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 }
 
 export default async function PostPage({ params }: PostPageProps) {
-  const post = await postService.getPostBySlug(params.slug);
+  let post = await postService.getPostBySlug(params.slug);
 
   if (!post) {
     notFound();
   }
 
-  // Increment view count - this happens on the server when the page is requested.
-  // The current view won't see the immediate increment, but subsequent views will.
-  await postService.incrementViewCount(post.id);
+  // Increment view count and get the new count
+  const newViewCount = await postService.incrementViewCount(post.id);
+
+  // Update the post object for the current render if the increment was successful
+  if (newViewCount !== null) {
+    post = { ...post, viewCount: newViewCount };
+  }
+  // If newViewCount is null, an error occurred during increment,
+  // so we'll display the viewCount fetched initially.
 
   const formattedDate = new Date(post.date).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -127,3 +133,4 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
+
