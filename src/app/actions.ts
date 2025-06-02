@@ -8,11 +8,43 @@ import * as settingsService from '@/lib/settings-service';
 import type { Post, SiteSettings } from '@/types';
 import * as z from 'zod';
 import { cookies } from 'next/headers';
-import { supabase } from '@/lib/supabase-client'; // Import Supabase client
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'; // Import createClient
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const SUPABASE_BUCKET_NAME = 'post-thumbnails'; // Ensure this bucket exists and is public in your Supabase project
+const SUPABASE_BUCKET_NAME = 'post-thumbnails';
+
+// Helper function to create a Supabase admin client (uses service_role key)
+// This should only be used in server-side actions.
+function getSupabaseAdminClient(): SupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Supabase URL or Service Role Key is not configured for admin actions.');
+  }
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      // Important: By default, the service role key bypasses RLS.
+      // autoRefreshToken and persistSession are not typically needed for service roles.
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false
+    }
+  });
+}
+
+// Helper function to get the public Supabase client (uses anon key)
+// This is safe for constructing public URLs.
+function getSupabasePublicClient(): SupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase URL or Anon Key is not configured for public client.');
+  }
+  return createClient(supabaseUrl, supabaseAnonKey);
+}
+
 
 const postTextFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
@@ -38,38 +70,35 @@ async function handleSupabaseFileUpload(file: File | undefined): Promise<string 
     throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
   }
 
+  const supabaseAdmin = getSupabaseAdminClient(); // Use admin client for upload
+
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
   const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
-  // Sanitize filename to prevent issues with Supabase paths, e.g., removing special characters other than '.', '-'
   const sanitizedBaseName = (file.name.replace(/\.[^/.]+$/, "") || 'untitled').replace(/[^a-zA-Z0-9_.-]/g, '_');
   const filename = `${sanitizedBaseName}-${uniqueSuffix}${extension}`;
   
-  // Path within the bucket, e.g., public/my-image-123.png
-  // Storing in a 'public/' folder within the bucket is a common convention but not strictly necessary
-  // if the bucket itself is public.
-  const filePathInBucket = `public/${filename}`;
+  const filePathInBucket = `public/${filename}`; // Standard practice to put public files in a 'public/' prefix
 
-
-  const { data, error } = await supabase.storage
+  const { data, error } = await supabaseAdmin.storage
     .from(SUPABASE_BUCKET_NAME)
     .upload(filePathInBucket, file, {
-      cacheControl: '3600', // Cache for 1 hour
-      upsert: false, // Don't overwrite if file exists (should be unique due to suffix)
+      cacheControl: '3600',
+      upsert: false, 
     });
 
   if (error) {
-    console.error("Error uploading to Supabase Storage:", error);
-    throw new Error(`Could not upload file to cloud storage. Details: ${error.message}. Ensure bucket '${SUPABASE_BUCKET_NAME}' exists and is public, and RLS policies allow uploads.`);
+    console.error("Error uploading to Supabase Storage (admin client):", error);
+    throw new Error(`Could not upload file to cloud storage. Details: ${error.message}.`);
   }
 
-  // Construct the public URL
-  // The path in Supabase Storage is data.path
-  const { data: publicUrlData } = supabase.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
+  // Construct the public URL using the public client
+  const supabasePublic = getSupabasePublicClient();
+  const { data: publicUrlData } = supabasePublic.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
   
   if (!publicUrlData || !publicUrlData.publicUrl) {
       console.error("Could not get public URL for Supabase file:", data.path);
-      // Attempt to delete the uploaded file if URL retrieval fails to avoid orphaned files
-      await supabase.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]);
+      // Attempt to delete the uploaded file if URL retrieval fails (use admin client)
+      await supabaseAdmin.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]);
       throw new Error("File uploaded, but could not retrieve its public URL.");
   }
   
@@ -82,14 +111,11 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
     return;
   }
   
-  // Extract the file path from the Supabase public URL
-  // Example URL: https://<project-ref>.supabase.co/storage/v1/object/public/<bucket-name>/<file-path-in-bucket>
-  // We need to extract <file-path-in-bucket>
+  const supabaseAdmin = getSupabaseAdminClient(); // Use admin client for deletion
+
   try {
     const url = new URL(fileUrl);
     const pathParts = url.pathname.split('/');
-    // The actual file path starts after "/object/public/<bucket-name>/"
-    // So, if bucket name is at index 5, path starts from index 6
     const bucketNameIndex = pathParts.indexOf(SUPABASE_BUCKET_NAME);
     if (bucketNameIndex === -1 || bucketNameIndex + 1 >= pathParts.length) {
         console.error('Could not parse file path from Supabase URL:', fileUrl);
@@ -102,17 +128,14 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
         return;
     }
 
-    const { error } = await supabase.storage
+    const { error } = await supabaseAdmin.storage
       .from(SUPABASE_BUCKET_NAME)
       .remove([filePathInBucket]);
 
     if (error) {
-      // It's common for delete to fail if RLS policies are restrictive or if file was already deleted.
-      // Log as a warning rather than throwing an error that breaks the flow,
-      // unless strict cleanup is absolutely critical.
-      console.warn('Failed to delete file from Supabase Storage:', filePathInBucket, error.message);
+      console.warn('Failed to delete file from Supabase Storage (admin client):', filePathInBucket, error.message);
     } else {
-      console.log('Successfully deleted file from Supabase Storage:', filePathInBucket);
+      console.log('Successfully deleted file from Supabase Storage (admin client):', filePathInBucket);
     }
   } catch (error: any) {
     console.error('Error parsing or deleting Supabase file URL:', fileUrl, error.message);
@@ -155,7 +178,6 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    // If upload happened but post creation failed, try to delete the orphaned Supabase file
     if (thumbnailUrl) await deleteSupabaseFile(thumbnailUrl); 
     return {
       success: false,
@@ -201,7 +223,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
-      // If there was an old thumbnail on Supabase, delete it
       if (currentThumbnailUrl) {
         await deleteSupabaseFile(currentThumbnailUrl);
       }
@@ -219,7 +240,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      // If update failed but a new image was uploaded, delete the new orphaned image
       if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
       return {
         success: false,
@@ -229,7 +249,7 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
-    if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded); // Cleanup on error
+    if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
     return {
       success: false,
       message: error.message || 'Could not update post.',
@@ -249,10 +269,9 @@ export async function deletePostAction(postId: string) {
   try {
     const postToDelete = await postService.getPostById(postId);
     if (postToDelete?.thumbnailUrl) {
-      // Delete the associated image from Supabase Storage
       await deleteSupabaseFile(postToDelete.thumbnailUrl);
     }
-    await postService.deletePostById(postId); // Delete post data from posts.json
+    await postService.deletePostById(postId);
     revalidatePath('/');
     revalidatePath('/admin/posts');
     return { success: true, message: 'Post deleted successfully.' };
@@ -406,3 +425,4 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
+
