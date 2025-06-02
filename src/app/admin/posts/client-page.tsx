@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card'; // CardTitle, CardDescription removed as they are in parent
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Post } from '@/types';
-import { PlusCircle, Edit2, Trash2, ExternalLink, Search, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, ExternalLink, Loader2 } from 'lucide-react'; // Search icon removed
 import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
+// Input component removed as it's no longer used for search
 import { useToast } from '@/hooks/use-toast';
 import { deletePostAction } from '@/app/actions'; // Import server action
 import {
@@ -30,27 +30,19 @@ interface AdminPostsClientPageProps {
 }
 
 export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientPageProps) {
-  const [allPosts, setAllPosts] = useState<Post[]>(initialPosts);
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  // const [filteredPosts, setFilteredPosts] = useState<Post[]>(initialPosts); // Will use 'posts' directly
   const [isLoading, setIsLoading] = useState(false); // For client-side operations like delete
-  const [searchTerm, setSearchTerm] = useState('');
+  // const [searchTerm, setSearchTerm] = useState(''); // Search term state removed
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition(); // For delete operation
 
   useEffect(() => {
-    setAllPosts(initialPosts);
-    setFilteredPosts(initialPosts);
+    setPosts(initialPosts);
+    // setFilteredPosts(initialPosts); // Update will be directly on 'posts'
   }, [initialPosts]);
 
-  useEffect(() => {
-    const lowercasedSearchTerm = searchTerm.toLowerCase();
-    const newFilteredPosts = allPosts.filter(
-      (post) =>
-        post.title.toLowerCase().includes(lowercasedSearchTerm) ||
-        post.tags.some(tag => tag.toLowerCase().includes(lowercasedSearchTerm))
-    );
-    setFilteredPosts(newFilteredPosts);
-  }, [searchTerm, allPosts]);
+  // useEffect to filter posts based on searchTerm removed
 
   const handleDeletePost = async (postId: string, postTitle: string) => {
     startTransition(async () => {
@@ -61,7 +53,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
           title: 'Post Deleted',
           description: `"${postTitle}" has been successfully deleted.`,
         });
-        setAllPosts(prev => prev.filter(post => post.id !== postId));
+        setPosts(prev => prev.filter(post => post.id !== postId));
       } else {
         toast({
           variant: 'destructive',
@@ -100,21 +92,12 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
 
       <Card className="shadow-sm">
         <CardHeader>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search posts by title or tag..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 w-full sm:w-[300px]"
-            />
-          </div>
+          {/* Search input removed from here */}
         </CardHeader>
         <CardContent>
-          {filteredPosts.length === 0 && !isLoading ? (
+          {posts.length === 0 && !isLoading ? (
             <p className="text-muted-foreground text-center py-10">
-              {searchTerm ? `No posts found for "${searchTerm}".` : "No posts yet. Create your first one!"}
+              No posts yet. Create your first one!
             </p>
           ) : (
             <Table>
@@ -127,7 +110,7 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPosts.map((post) => (
+                {posts.map((post) => (
                   <TableRow key={post.id}>
                     <TableCell className="font-medium max-w-xs truncate">
                       <Link href={`/posts/${post.slug}`} className="hover:underline" target="_blank" title={post.title}>
@@ -190,5 +173,3 @@ export default function AdminPostsClientPage({ initialPosts }: AdminPostsClientP
     </>
   );
 }
-
-    
