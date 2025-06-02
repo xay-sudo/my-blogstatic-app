@@ -31,14 +31,11 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl) {
-    throw new Error('Supabase URL (NEXT_PUBLIC_SUPABASE_URL) is not configured for admin actions.');
-  }
-  if (!supabaseServiceRoleKey) {
-    throw new Error('Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) is not configured for admin actions.');
-  }
-  if (!isValidHttpUrl(supabaseUrl)) {
+  if (!supabaseUrl || !isValidHttpUrl(supabaseUrl)) {
     throw new Error(`Invalid Supabase URL format: "${supabaseUrl}". Please check NEXT_PUBLIC_SUPABASE_URL.`);
+  }
+  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
+    throw new Error(`Invalid or missing Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY). Please check environment variables.`);
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
@@ -54,14 +51,11 @@ function getSupabasePublicClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl) {
-    throw new Error('Supabase URL (NEXT_PUBLIC_SUPABASE_URL) is not configured for public client.');
-  }
-  if (!supabaseAnonKey) {
-    throw new Error('Supabase Anon Key (NEXT_PUBLIC_SUPABASE_ANON_KEY) is not configured for public client.');
-  }
-  if (!isValidHttpUrl(supabaseUrl)) {
+  if (!supabaseUrl || !isValidHttpUrl(supabaseUrl)) {
      throw new Error(`Invalid Supabase URL format: "${supabaseUrl}". Please check NEXT_PUBLIC_SUPABASE_URL.`);
+  }
+  if (!supabaseAnonKey || supabaseAnonKey.length < 50) { // Basic length check
+    throw new Error(`Invalid or missing Supabase Anon Key (NEXT_PUBLIC_SUPABASE_ANON_KEY). Please check environment variables.`);
   }
   return createClient(supabaseUrl, supabaseAnonKey);
 }
@@ -91,59 +85,56 @@ async function handleSupabaseFileUpload(file: File | undefined): Promise<string 
     throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
   }
 
-  const supabaseAdmin = getSupabaseAdminClient(); 
+  const supabaseAdmin = getSupabaseAdminClient();
 
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
   const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
   const sanitizedBaseName = (file.name.replace(/\.[^/.]+$/, "") || 'untitled').replace(/[^a-zA-Z0-9_.-]/g, '_');
   const filename = `${sanitizedBaseName}-${uniqueSuffix}${extension}`;
-  
-  const filePathInBucket = `public/${filename}`; 
+
+  const filePathInBucket = `public/${filename}`;
 
   const { data, error } = await supabaseAdmin.storage
     .from(SUPABASE_BUCKET_NAME)
     .upload(filePathInBucket, file, {
       cacheControl: '3600',
-      upsert: false, 
+      upsert: false,
     });
 
   if (error) {
     console.error("Error uploading to Supabase Storage (admin client):", error);
-    throw new Error(`Could not upload file to cloud storage. Details: ${error.message}.`);
+    throw new Error(`Could not upload file to cloud storage. Details: ${error.message || JSON.stringify(error)}.`);
   }
 
   const supabasePublic = getSupabasePublicClient();
   const { data: publicUrlData } = supabasePublic.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
-  
+
   if (!publicUrlData || !publicUrlData.publicUrl) {
       console.error("Could not get public URL for Supabase file:", data.path);
-      await supabaseAdmin.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]);
+      await supabaseAdmin.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]); // Clean up orphaned file
       throw new Error("File uploaded, but could not retrieve its public URL.");
   }
-  
+
   return publicUrlData.publicUrl;
 }
 
 async function deleteSupabaseFile(fileUrl: string | undefined) {
-  if (!fileUrl || !isValidHttpUrl(fileUrl)) { // Added isValidHttpUrl check for fileUrl before parsing
+  if (!fileUrl || !isValidHttpUrl(fileUrl)) {
     console.warn('Invalid or no file URL provided for deletion from Supabase:', fileUrl);
     return;
   }
-  
+
   const supabaseAdmin = getSupabaseAdminClient();
 
   try {
-    const url = new URL(fileUrl); // This should be safe now due to the check above
+    const url = new URL(fileUrl);
     const pathParts = url.pathname.split('/');
-    // Find the bucket name in the path, and take everything after it.
-    // Example: /storage/v1/object/public/post-thumbnails/public/image.png
-    // We need "public/image.png"
     let filePathInBucket = '';
     const bucketNameIndex = pathParts.indexOf(SUPABASE_BUCKET_NAME);
     if (bucketNameIndex !== -1 && bucketNameIndex < pathParts.length -1) {
         filePathInBucket = pathParts.slice(bucketNameIndex + 1).join('/');
     }
-    
+
     if (!filePathInBucket) {
         console.error('Could not parse file path from Supabase URL for deletion:', fileUrl);
         return;
@@ -159,7 +150,6 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
       console.log('Successfully deleted file from Supabase Storage (admin client):', filePathInBucket);
     }
   } catch (error: any) {
-    // This catch is for the new URL(fileUrl) or other unexpected errors.
     console.error('Error processing Supabase file URL for deletion:', fileUrl, error.message);
   }
 }
@@ -199,15 +189,36 @@ export async function createPostAction(formData: FormData) {
     await postService.addPost(postData);
 
   } catch (error: any) {
-    console.error('Failed to create post:', error);
-    // Attempt to clean up uploaded file if post creation failed *after* upload
+    console.error('Failed to create post (in action):', error);
+    let detailedErrorMessage = 'Could not create post.';
+
+    if (error instanceof Error && error.message) {
+        detailedErrorMessage = error.message;
+        // Check if the message is the generic one with " {}"
+        if (error.message.endsWith("{}") || error.message === "Could not add post.") {
+            const errorString = JSON.stringify(error);
+            if (errorString !== '{}' && !error.message.includes(errorString)) {
+                detailedErrorMessage = `Could not add post. Server error: ${errorString}`;
+            } else if (error.toString && error.toString() !== '[object Object]' && !error.message.includes(error.toString())) {
+                 detailedErrorMessage = `Could not add post. Server error: ${error.toString()}`;
+            } else {
+                detailedErrorMessage = "Could not add post. An unspecified error occurred. Check server logs.";
+            }
+        }
+    } else if (typeof error === 'string') {
+        detailedErrorMessage = error;
+    } else {
+        const errorString = JSON.stringify(error);
+        detailedErrorMessage = `Could not create post. Details: ${errorString === '{}' ? 'An unknown error structure was encountered. Check server logs.' : errorString }`;
+    }
+
     if (thumbnailUrl) {
         console.log('Attempting to delete uploaded thumbnail due to post creation error...');
         await deleteSupabaseFile(thumbnailUrl);
     }
     return {
       success: false,
-      message: error.message || 'Could not create post.',
+      message: detailedErrorMessage,
       errors: null,
     };
   }
@@ -245,7 +256,7 @@ export async function updatePostAction(postId: string, formData: FormData) {
     if (!existingPost) {
       return { success: false, message: 'Post not found.', errors: null };
     }
-    
+
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
@@ -255,7 +266,7 @@ export async function updatePostAction(postId: string, formData: FormData) {
       newUrlUploaded = await handleSupabaseFileUpload(newThumbnailFile);
       finalThumbnailUrl = newUrlUploaded;
     } else {
-      finalThumbnailUrl = currentThumbnailUrl; 
+      finalThumbnailUrl = currentThumbnailUrl;
     }
 
     const postData: PostServiceValues = {
@@ -275,10 +286,20 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
+    let detailedErrorMessage = 'Could not update post.';
+     if (error instanceof Error && error.message) {
+        detailedErrorMessage = error.message;
+    } else if (typeof error === 'string') {
+        detailedErrorMessage = error;
+    } else {
+        const errorString = JSON.stringify(error);
+        detailedErrorMessage = `Could not update post. Details: ${errorString === '{}' ? 'An unknown error structure was encountered. Check server logs.' : errorString }`;
+    }
+
     if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
     return {
       success: false,
-      message: error.message || 'Could not update post.',
+      message: detailedErrorMessage,
       errors: null,
     };
   }
@@ -303,9 +324,9 @@ export async function deletePostAction(postId: string) {
     return { success: true, message: 'Post deleted successfully.' };
   } catch (error) {
     console.error('Failed to delete post:', error);
-    return { 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Could not delete post.' 
+    return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Could not delete post. Check server logs.'
     };
   }
 }
@@ -387,10 +408,10 @@ export async function updateSiteSettingsAction(formData: FormData) {
     };
 
     await settingsService.updateSettings(settingsToUpdate);
-    revalidatePath('/'); 
-    revalidatePath('/admin/settings'); 
-    revalidatePath('/login'); 
-    
+    revalidatePath('/');
+    revalidatePath('/admin/settings');
+    revalidatePath('/login');
+
     return {
       success: true,
       message: 'Site settings updated successfully.',
@@ -400,7 +421,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     console.error('Failed to update site settings:', error);
     return {
       success: false,
-      message: error.message || 'Could not update site settings.',
+      message: error.message || 'Could not update site settings. Check server logs.',
       errors: null,
     };
   }
@@ -437,9 +458,9 @@ export async function loginAction(
       sameSite: 'lax',
     });
     revalidatePath('/admin');
-    revalidatePath('/login'); 
-    redirect('/admin'); 
-   
+    revalidatePath('/login');
+    redirect('/admin');
+
   } else {
     return { message: 'Invalid username or password.', success: false };
   }
@@ -451,3 +472,5 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
+
+    
