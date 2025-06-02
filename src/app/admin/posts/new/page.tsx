@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud } from 'lucide-react';
+import { ArrowLeft, Loader2 as Loader2Icon, Sparkles, AlertCircle, Link2, DownloadCloud, Download } from 'lucide-react';
 import { createPostAction } from '@/app/actions';
 import { suggestTags } from '@/ai/flows/suggest-tags';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +71,9 @@ export default function NewPostPage() {
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingError, setScrapingError] = useState<string | null>(null);
+  
+  const [externalScrapedThumbnailUrl, setExternalScrapedThumbnailUrl] = useState<string | null>(null);
+  const [isDownloadingScrapedThumbnail, setIsDownloadingScrapedThumbnail] = useState(false);
 
 
   const form = useForm<PostFormClientValues>({
@@ -99,6 +102,7 @@ export default function NewPostPage() {
   }, [watchedTitle, form]);
 
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setExternalScrapedThumbnailUrl(null); // Clear any pending external URL if user uploads manually
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -121,11 +125,47 @@ export default function NewPostPage() {
     } else {
       setThumbnailFile(null);
       setThumbnailPreview(null);
-       if (e.target) { // Clear the input value so selecting the same file again triggers onChange
+       if (e.target) { 
             e.target.value = '';
        }
     }
   };
+
+  const handleDownloadAndUseScrapedThumbnail = async () => {
+    if (!externalScrapedThumbnailUrl) return;
+
+    setIsDownloadingScrapedThumbnail(true);
+    toast({ title: "Downloading Image...", description: "Attempting to download the scraped thumbnail." });
+
+    try {
+      const response = await fetch(externalScrapedThumbnailUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      const fileName = externalScrapedThumbnailUrl.substring(externalScrapedThumbnailUrl.lastIndexOf('/') + 1) || 'scraped-thumbnail.png';
+      const file = new File([blob], fileName, { type: blob.type });
+
+      setThumbnailFile(file);
+      setThumbnailPreview(URL.createObjectURL(file));
+      setExternalScrapedThumbnailUrl(null); // Clear after successful download and set
+      
+      // Clear the actual file input element's displayed name
+      const fileInput = document.getElementById('thumbnail-upload') as HTMLInputElement | null;
+      if (fileInput) {
+          fileInput.value = '';
+      }
+
+      toast({ title: "Image Downloaded", description: "The scraped thumbnail has been prepared for upload." });
+    } catch (error: any) {
+      console.error("Error downloading scraped thumbnail:", error);
+      toast({ variant: "destructive", title: "Download Failed", description: `Could not download the image: ${error.message}. Please upload manually.` });
+      // Keep externalScrapedThumbnailUrl so user can see the preview or try again, or upload manually
+    } finally {
+      setIsDownloadingScrapedThumbnail(false);
+    }
+  };
+
 
   const handleSuggestTags = async () => {
     const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
@@ -182,6 +222,7 @@ export default function NewPostPage() {
     setScrapingError(null);
     setThumbnailFile(null); 
     setThumbnailPreview(null); 
+    setExternalScrapedThumbnailUrl(null);
   
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
@@ -208,7 +249,7 @@ export default function NewPostPage() {
             const details = errorJson.details ? ` Details: ${errorJson.details}` : '';
             errorDesc = `${errorMsg}${details}`;
             if (errorJson.error === 'internal') {
-                 errorDesc += ' Please check the Cloud Function logs in Firebase for more details.';
+                 errorDesc += ' Please check the server logs for /api/scrape.';
             }
           } else {
              errorDesc += ` Response was not JSON. Preview: ${(responseBodyText || "Could not read response body.").substring(0, 200)}... Check server logs for /api/scrape.`;
@@ -242,7 +283,7 @@ export default function NewPostPage() {
         let errorMsg = scrapedData.error;
         const details = scrapedData.details ? ` Details: ${scrapedData.details}` : '';
         if (scrapedData.error === 'internal') {
-          errorMsg += ' Please check the Cloud Function logs in Firebase for more details.';
+          errorMsg += ' Please check the server logs for /api/scrape.';
         }
         setScrapingError(`${errorMsg}${details}`);
         toast({ variant: "destructive", title: "Scraping Error From API", description: `${errorMsg}${details}`, duration: 8000 });
@@ -272,10 +313,11 @@ export default function NewPostPage() {
       }
       
       if (scrapedData.thumbnailUrl) {
-        setThumbnailPreview(scrapedData.thumbnailUrl);
+        setThumbnailPreview(scrapedData.thumbnailUrl); // Preview external URL
+        setExternalScrapedThumbnailUrl(scrapedData.thumbnailUrl); // Store for potential download
         toast({ 
-          title: "Thumbnail Previewed", 
-          description: "A thumbnail was found and is previewed. To use it, please download it and re-upload it via the 'Thumbnail Image' field below, or select another image. The previewed image will not be saved automatically.",
+          title: "Thumbnail Found", 
+          description: "A thumbnail was found and is previewed. Click 'Download & Use Image' below the preview to prepare it for upload, or upload a different image manually.",
           duration: 10000 
         });
       } else {
@@ -285,11 +327,11 @@ export default function NewPostPage() {
   
       toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
 
-    } catch (error: any) { // Catches network errors or other issues with fetch() itself
+    } catch (error: any) { 
       console.error("Error calling /api/scrape:", error);
-      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again. If the problem persists, check server logs.`;
+      const fullErrorMessageForState = `Scraping failed: ${error.message || 'Unknown client-side error during fetch'}. Please check your network or try again. If the problem persists, check server logs for /api/scrape.`;
       setScrapingError(fullErrorMessageForState);
-      toast({ variant: "destructive", title: "Network or Fetch Error", description: error.message || "An unknown error occurred while trying to fetch content. Check server logs.", duration: 8000 });
+      toast({ variant: "destructive", title: "Network or Fetch Error", description: error.message || "An unknown error occurred while trying to fetch content. Check server logs for /api/scrape.", duration: 8000 });
     } finally {
       setIsScraping(false);
     }
@@ -343,6 +385,7 @@ export default function NewPostPage() {
         form.reset();
         setThumbnailPreview(null);
         setThumbnailFile(null);
+        setExternalScrapedThumbnailUrl(null);
         setSuggestedAiTags([]);
         setAiTagsError(null);
         setScrapeUrl(''); 
@@ -399,14 +442,14 @@ export default function NewPostPage() {
                   placeholder="https://example.com/blog-post-to-scrape"
                   value={scrapeUrl}
                   onChange={(e) => setScrapeUrl(e.target.value)}
-                  disabled={isScraping || isSubmittingForm}
+                  disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail}
                   className="mt-1"
                 />
               </div>
               <Button 
                 type="button" 
                 onClick={handleFetchContentFromUrl} 
-                disabled={isScraping || isSubmittingForm || !scrapeUrl}
+                disabled={isScraping || isSubmittingForm || !scrapeUrl || isDownloadingScrapedThumbnail}
                 className="w-full sm:w-auto"
               >
                 {isScraping ? (
@@ -435,15 +478,15 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">Feature Image:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="crop" id="scrape-img-crop" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-img-crop" className="font-normal">Crop</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="flip" id="scrape-img-flip" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-img-flip" className="font-normal">Flip</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="keep_original" id="scrape-img-keep" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-img-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -452,11 +495,11 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">White Space:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="yes" id="scrape-ws-yes" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-ws-yes" className="font-normal">Remove</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="keep_original" id="scrape-ws-keep" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-ws-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
@@ -465,16 +508,16 @@ export default function NewPostPage() {
                 <Label className="font-medium w-32 shrink-0">Random Img Order:</Label>
                 <RadioGroup defaultValue="keep_original" className="flex flex-wrap gap-x-4 gap-y-1">
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="yes" id="scrape-rio-yes" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-rio-yes" className="font-normal">Yes</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm} />
+                    <RadioGroupItem value="keep_original" id="scrape-rio-keep" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail} />
                     <Label htmlFor="scrape-rio-keep" className="font-normal">Keep Original</Label>
                   </div>
                 </RadioGroup>
               </div>
-              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm}>
+              <Button variant="link" size="sm" className="p-0 h-auto text-primary" disabled={isScraping || isSubmittingForm || isDownloadingScrapedThumbnail}>
                  Set Content Rules (placeholder)
               </Button>
             </div>
@@ -492,7 +535,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping} />
+                    <Input placeholder="Your Post Title" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -505,7 +548,7 @@ export default function NewPostPage() {
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping}/>
+                    <Input placeholder="your-post-slug" {...field} disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}/>
                   </FormControl>
                   <FormDescription>URL-friendly version of the title (auto-updated).</FormDescription>
                   <FormMessage />
@@ -521,17 +564,32 @@ export default function NewPostPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailFileChange}
-                  disabled={isSubmittingForm || isSuggestingTags || isScraping}
+                  disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
               </FormControl>
               {thumbnailPreview && (
-                <div className="mt-2 p-2 border rounded-md inline-block">
+                <div className="mt-2 p-2 border rounded-md inline-block relative group">
                   <Image src={thumbnailPreview} alt="Thumbnail preview" width={128} height={128} style={{objectFit:"cover"}} className="rounded" data-ai-hint="thumbnail preview" />
+                   {externalScrapedThumbnailUrl && thumbnailPreview.startsWith('http') && (
+                     <Button
+                       type="button"
+                       size="sm"
+                       variant="outline"
+                       onClick={handleDownloadAndUseScrapedThumbnail}
+                       disabled={isDownloadingScrapedThumbnail || isSubmittingForm}
+                       className="absolute bottom-1 right-1 opacity-80 group-hover:opacity-100 transition-opacity text-xs p-1.5 h-auto"
+                     >
+                       {isDownloadingScrapedThumbnail ? <Loader2Icon className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                       <span className="ml-1">Use</span>
+                     </Button>
+                   )}
                 </div>
               )}
               <FormDescription>
-                Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under {MAX_THUMBNAIL_SIZE_MB}MB). If a thumbnail was previewed from a URL import, you must still manually select and upload it (or another image) here if you wish to save it.
+                {externalScrapedThumbnailUrl 
+                  ? "A thumbnail was found from the URL. Click 'Use' on the preview to download and prepare it for upload, or manually select a different image file."
+                  : "Select an image. It will be uploaded with the post. For faster uploads and better performance, use optimized images (e.g., under 5MB)."}
               </FormDescription>
             </FormItem>
 
@@ -546,12 +604,12 @@ export default function NewPostPage() {
                       apiKey={tinymceApiKey || 'no-api-key'}
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
-                      value={field.value} // Ensure editor updates when form value changes programmatically
+                      value={field.value} 
                       onEditorChange={(content, _editor) => {
                         field.onChange(content);
                         form.trigger('content');
                       }}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}
                       init={{
                         height: 500,
                         menubar: 'file edit view insert format tools table help',
@@ -585,7 +643,7 @@ export default function NewPostPage() {
                     <Input
                       placeholder="e.g., nextjs, react, webdev"
                       {...field}
-                      disabled={isSubmittingForm || isSuggestingTags || isScraping}
+                      disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}
                     />
                   </FormControl>
                   <FormDescription>Comma-separated tags. e.g., tech, news, updates</FormDescription>
@@ -594,7 +652,7 @@ export default function NewPostPage() {
                     <Button 
                       type="button" 
                       onClick={handleSuggestTags} 
-                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping}
+                      disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping || isDownloadingScrapedThumbnail}
                       variant="outline"
                       size="sm"
                       className="flex items-center"
@@ -646,10 +704,10 @@ export default function NewPostPage() {
             />
             
             <div className="flex justify-end space-x-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping}>
+              <Button type="submit" variant="primary" disabled={form.formState.isSubmitting || isSubmittingForm || isSuggestingTags || isScraping || isDownloadingScrapedThumbnail}>
                 {isSubmittingForm ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
