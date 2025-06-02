@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import AISuggestTags from '@/components/AISuggestTags';
+// import AISuggestTags from '@/components/AISuggestTags'; // Removed import
 import { CalendarDays } from 'lucide-react';
 
 interface PostPageProps {
@@ -88,7 +88,8 @@ export default async function PostPage({ params }: PostPageProps) {
         </footer>
       )}
 
-      <AISuggestTags postContent={post.content} currentTags={post.tags || []} />
+      {/* <AISuggestTags postContent={post.content} currentTags={post.tags || []} /> Removed this line */}
     </article>
   );
 }
+
