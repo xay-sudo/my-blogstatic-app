@@ -203,7 +203,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
         toast({
           variant: "destructive",
           title: 'Update Failed',
-          description: result?.message || 'An unknown error occurred.',
+          description: (result?.message || 'An unknown error occurred.') + "\nPlease check the form fields for specific error messages.",
         });
         if (result?.errors) {
           Object.entries(result.errors).forEach(([fieldName, errors]) => {
