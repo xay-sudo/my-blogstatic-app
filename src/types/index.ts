@@ -1,3 +1,4 @@
+
 export interface Post {
   id: string;
   slug: string;
@@ -6,4 +7,10 @@ export interface Post {
   content: string;
   tags: string[];
   thumbnailUrl?: string;
+}
+
+export interface SiteSettings {
+  siteTitle: string;
+  siteDescription: string;
+  postsPerPage: number;
 }

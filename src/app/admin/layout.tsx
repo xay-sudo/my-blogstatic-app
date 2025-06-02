@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, FileText, LayoutDashboard, LogOut } from 'lucide-react';
+import { Home, FileText, LayoutDashboard, LogOut, Settings } from 'lucide-react'; // Added Settings
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -35,6 +35,7 @@ export default function AdminLayout({
             </div>
           </div>
           <nav className="space-y-1 flex-grow">
+            <Skeleton className="h-10 w-full mb-2" />
             <Skeleton className="h-10 w-full mb-2" />
             <Skeleton className="h-10 w-full" />
           </nav>
@@ -79,6 +80,13 @@ export default function AdminLayout({
           >
             <FileText className="w-5 h-5" />
             <span>Manage Posts</span>
+          </Link>
+          <Link 
+            href="/admin/settings" 
+            className="flex items-center space-x-3 p-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors text-sm font-medium"
+          >
+            <Settings className="w-5 h-5" />
+            <span>Site Settings</span>
           </Link>
         </nav>
         <Button variant="outline" onClick={logoutAdmin} className="w-full">

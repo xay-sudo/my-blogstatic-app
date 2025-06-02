@@ -31,6 +31,21 @@ export default function AdminDashboardPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Site Settings</CardTitle>
+              <Settings className="w-6 h-6 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-3">Configure general settings for your blog.</CardDescription>
+            <Link href="/admin/settings">
+              <Button variant="primary" className="w-full">Configure Settings</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold">Analytics</CardTitle>
               <BarChart2 className="w-6 h-6 text-primary" />
             </div>
@@ -41,18 +56,6 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold">Site Settings</CardTitle>
-              <Settings className="w-6 h-6 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-3">Configure general settings for your blog.</CardDescription>
-            <Button variant="outline" className="w-full" disabled>Configure Settings</Button>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

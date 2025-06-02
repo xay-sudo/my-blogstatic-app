@@ -1,12 +1,13 @@
 
 import type { Post } from '@/types';
 import * as postService from '@/lib/post-service'; 
+import { getSettings } from '@/lib/settings-service'; // Import getSettings
 import PostCard from '@/components/PostCard';
 import PaginationControlsClient from '@/components/PaginationControlsClient'; 
 import SearchBarClient from '@/components/SearchBarClient'; 
 import { Skeleton } from '@/components/ui/skeleton';
 
-const POSTS_PER_PAGE = 6;
+// const POSTS_PER_PAGE = 6; // Will be replaced by settings
 
 interface HomePageProps {
   searchParams?: {
@@ -17,13 +18,15 @@ interface HomePageProps {
 
 // Loading skeleton for the home page post cards
 function HomePageLoadingSkeleton() {
+  // Use a default posts per page for skeleton to avoid awaiting settings here
+  const DEFAULT_POSTS_SKELETON = 6;
   return (
     <div className="space-y-8">
       <div className="flex justify-center mb-12">
         <Skeleton className="h-10 w-full max-w-md" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[...Array(POSTS_PER_PAGE)].map((_, index) => (
+        {[...Array(DEFAULT_POSTS_SKELETON)].map((_, index) => (
           <div key={index} className="flex flex-col space-y-3 p-4 border rounded-lg bg-card shadow">
             <Skeleton className="h-[200px] w-full rounded-xl" />
             <div className="space-y-2 pt-2">
@@ -45,6 +48,8 @@ function HomePageLoadingSkeleton() {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const allPosts = await postService.getAllPosts();
+  const settings = await getSettings();
+  const postsPerPage = settings.postsPerPage > 0 ? settings.postsPerPage : 6; // Fallback
 
   const currentPage = Number(searchParams?.page) || 1;
   const searchTerm = searchParams?.search || '';
@@ -58,11 +63,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     : allPosts;
 
   const paginatedPosts = filteredPosts.slice(
-    (currentPage - 1) * POSTS_PER_PAGE,
-    currentPage * POSTS_PER_PAGE
+    (currentPage - 1) * postsPerPage,
+    currentPage * postsPerPage
   );
 
-  const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
+  const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
 
   if (allPosts.length === 0 && !searchTerm) { 
      return (

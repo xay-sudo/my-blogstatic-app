@@ -4,7 +4,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import * as postService from '@/lib/post-service';
-import type { Post } from '@/types';
+import * as settingsService from '@/lib/settings-service';
+import type { Post, SiteSettings } from '@/types';
 import * as z from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
@@ -208,4 +209,50 @@ export async function deletePostAction(postId: string) {
     };
   }
 }
-    
+
+// Site Settings Action
+const siteSettingsSchema = z.object({
+  siteTitle: z.string().min(3, { message: 'Site title must be at least 3 characters long.' }).max(100),
+  siteDescription: z.string().min(10, { message: 'Site description must be at least 10 characters long.' }).max(300),
+  postsPerPage: z.coerce.number().int().min(1, { message: 'Must display at least 1 post per page.' }).max(50, { message: 'Cannot display more than 50 posts per page.' }),
+});
+
+export async function updateSiteSettingsAction(formData: FormData) {
+  const rawData = {
+    siteTitle: formData.get('siteTitle'),
+    siteDescription: formData.get('siteDescription'),
+    postsPerPage: formData.get('postsPerPage'),
+  };
+
+  const validation = siteSettingsSchema.safeParse(rawData);
+
+  if (!validation.success) {
+    console.error('Server-side validation failed (site settings):', validation.error.flatten().fieldErrors);
+    return {
+      success: false,
+      message: "Validation failed. Check server logs for details.",
+      errors: validation.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    await settingsService.updateSettings(validation.data as SiteSettings);
+    revalidatePath('/'); // Revalidate homepage (for postsPerPage and metadata)
+    revalidatePath('/admin/settings'); // Revalidate the settings page itself
+    // Potentially revalidate all post pages if metadata depends on site title/desc globally
+    // For now, revalidatePath('/') should cover metadata in layout.
+
+    return {
+      success: true,
+      message: 'Site settings updated successfully.',
+      errors: null,
+    };
+  } catch (error: any) {
+    console.error('Failed to update site settings:', error);
+    return {
+      success: false,
+      message: error.message || 'Could not update site settings.',
+      errors: null,
+    };
+  }
+}

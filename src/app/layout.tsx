@@ -5,11 +5,20 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/Header';
 import { AuthProvider } from '@/contexts/AuthContext'; 
+import { getSettings } from '@/lib/settings-service'; // Import getSettings
 
-export const metadata: Metadata = {
-  title: 'Newstoday',
-  description: 'A modern blog platform with AI-powered tagging.',
-};
+// export const metadata: Metadata = {
+//   title: 'Newstoday',
+//   description: 'A modern blog platform with AI-powered tagging.',
+// };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  return {
+    title: settings.siteTitle || 'Newstoday',
+    description: settings.siteDescription || 'A modern blog platform with AI-powered tagging.',
+  };
+}
 
 export default function RootLayout({
   children,
