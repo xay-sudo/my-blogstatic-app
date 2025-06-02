@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck } from 'lucide-react'; 
+import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import type { SiteSettings } from '@/types';
 import RenderHtmlContent from '@/components/RenderHtmlContent';
