@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react'; // Added useRef
-import { Editor } from '@tinymce/tinymce-react'; // Import TinyMCE Editor
+import { useEffect, useRef } from 'react';
+import { Editor } from '@tinymce/tinymce-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; // Still used for excerpt
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation'; 
@@ -45,7 +45,7 @@ type PostFormValues = z.infer<typeof postFormSchema>;
 export default function NewPostPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const editorRef = useRef<any>(null); // For TinyMCE editor instance
+  const editorRef = useRef<any>(null);
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postFormSchema),
@@ -53,7 +53,7 @@ export default function NewPostPage() {
       title: '',
       slug: '',
       excerpt: '',
-      content: '<p>Write your blog post content here...</p>', // Initial content for TinyMCE
+      content: '<p>Write your blog post content here...</p>',
       tags: [], 
       imageUrl: '',
     },
@@ -158,7 +158,7 @@ export default function NewPostPage() {
                   <FormLabel>Content</FormLabel>
                   <FormControl>
                     <Editor
-                      apiKey="no-api-key" // Replace with your TinyMCE API key for production
+                      apiKey="no-api-key"
                       onInit={(_evt, editor) => editorRef.current = editor}
                       initialValue={field.value}
                       onEditorChange={(content, _editor) => {
@@ -178,7 +178,8 @@ export default function NewPostPage() {
                         'link image media codesample | removeformat | help',
                         content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:16px }',
                         skin: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oxide-dark' : 'oxide'),
-                        content_css: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default')
+                        content_css: (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'),
+                        readonly: false, // Explicitly set editor to be writable
                       }}
                     />
                   </FormControl>
