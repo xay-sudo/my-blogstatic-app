@@ -26,11 +26,15 @@ function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !isValidHttpUrl(supabaseUrl)) {
-    throw new Error(`CRITICAL: NEXT_PUBLIC_SUPABASE_URL is invalid for admin client. Value: "${supabaseUrl}". Please check environment variables.`);
+  if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl === 'your_supabase_project_url_here' || !supabaseUrl.startsWith('http')) {
+    throw new Error(
+      `CRITICAL: NEXT_PUBLIC_SUPABASE_URL is not defined, is a placeholder, or is invalid for admin client. Please check environment variables. Current value: "${supabaseUrl}"`
+    );
   }
-  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
-    throw new Error(`CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured or invalid for admin actions. Please check environment variables.`);
+  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.trim() === '' || supabaseServiceRoleKey === 'your_supabase_service_role_key_here' || supabaseServiceRoleKey.length < 50) { // Basic length check
+    throw new Error(
+      `CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not defined, is a placeholder, or is invalid for admin actions. Please check environment variables.`
+    );
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
@@ -141,21 +145,33 @@ export const getPostById = async (id: string): Promise<Post | undefined> => {
 };
 
 function formatSupabaseError(supabaseError: any): string {
-  if (!supabaseError) return "An unknown error occurred.";
+  if (!supabaseError) return "An unknown error occurred with the database operation.";
+
   // Prioritize more specific fields from Supabase error object
-  if (supabaseError.details) return supabaseError.details;
-  if (supabaseError.message && supabaseError.message !== "An error occurred" && supabaseError.message.trim() !== "" && supabaseError.message.trim() !== "{}") return supabaseError.message;
-  if (supabaseError.hint) return supabaseError.hint;
+  if (supabaseError.details && typeof supabaseError.details === 'string') return supabaseError.details;
+  if (supabaseError.message && typeof supabaseError.message === 'string' && supabaseError.message !== "An error occurred" && supabaseError.message.trim() !== "" && supabaseError.message.trim() !== "{}") return supabaseError.message;
+  if (supabaseError.hint && typeof supabaseError.hint === 'string') return supabaseError.hint;
 
   // Fallback for less specific or empty errors
-  const stringified = JSON.stringify(supabaseError);
-  if (stringified !== "{}") return `Database error: ${stringified}. Check server logs.`;
+  const stringifiedError = JSON.stringify(supabaseError);
+  if (stringifiedError !== "{}") { // If there's some content, even if not standard
+    return `Database error: ${stringifiedError}. CRITICAL: Inspect server logs for the full raw error.`;
+  }
 
-  return "Supabase database operation failed. Check server logs for details.";
+  // This is the most generic case, meaning the error object was likely empty.
+  return "Supabase database operation failed. The Supabase client returned minimal error details. CRITICAL: Inspect server logs for the raw Supabase error. This often indicates an issue with the SERVICE_ROLE_KEY or a database constraint violation.";
 }
 
 export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount'> & { viewCount?: number }): Promise<Post> => {
-  const adminSupabase = getSupabaseAdminClient();
+  let adminSupabase: SupabaseClient;
+  try {
+    adminSupabase = getSupabaseAdminClient();
+  } catch (e: any) {
+    console.error('Failed to initialize Supabase admin client in addPost:', e.message);
+    // This error should be specific from getSupabaseAdminClient (e.g., "CRITICAL: SUPABASE_SERVICE_ROLE_KEY...")
+    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+  }
+
   const postToInsert = {
     slug: newPostData.slug,
     title: newPostData.title,
@@ -177,11 +193,21 @@ export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount
     const friendlyErrorMessage = formatSupabaseError(error);
     throw new Error(`Could not add post. ${friendlyErrorMessage}`);
   }
+  if (!data) { // Should not happen if error is null, but as a safeguard
+    throw new Error('Could not add post. No data returned from Supabase after insert, despite no error.');
+  }
   return { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post;
 };
 
 export const updatePost = async (postId: string, updatedPostData: Partial<Omit<Post, 'id' | 'date'>>): Promise<Post | undefined> => {
-  const adminSupabase = getSupabaseAdminClient();
+  let adminSupabase: SupabaseClient;
+   try {
+    adminSupabase = getSupabaseAdminClient();
+  } catch (e: any)    {
+    console.error('Failed to initialize Supabase admin client in updatePost:', e.message);
+    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+  }
+
   const postToUpdate: { [key: string]: any } = {};
   if (updatedPostData.slug) postToUpdate.slug = updatedPostData.slug;
   if (updatedPostData.title) postToUpdate.title = updatedPostData.title;
@@ -191,7 +217,8 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
   if (updatedPostData.viewCount !== undefined) postToUpdate.view_count = updatedPostData.viewCount;
 
   if (Object.keys(postToUpdate).length === 0) {
-    return getPostById(postId);
+    console.warn('updatePost called with no fields to update for postId:', postId);
+    return getPostById(postId); // Return current post if nothing to update
   }
 
   const { data, error } = await adminSupabase
@@ -206,11 +233,22 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
     const friendlyErrorMessage = formatSupabaseError(error);
     throw new Error(`Could not update post. ${friendlyErrorMessage}`);
   }
+  if (!data && !error) { // No error but no data, means post with ID might not exist
+     console.warn(`Post with ID ${postId} not found during update, or no changes made.`);
+     return undefined;
+  }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
 };
 
 export const deletePostById = async (postId: string): Promise<void> => {
-  const adminSupabase = getSupabaseAdminClient();
+  let adminSupabase: SupabaseClient;
+  try {
+    adminSupabase = getSupabaseAdminClient();
+  } catch (e: any) {
+    console.error('Failed to initialize Supabase admin client in deletePostById:', e.message);
+    throw new Error(`Configuration error: ${e.message || 'Failed to initialize Supabase admin client. Check environment variables and server logs.'}`);
+  }
+
   const { error } = await adminSupabase
     .from('posts')
     .delete()
@@ -224,12 +262,21 @@ export const deletePostById = async (postId: string): Promise<void> => {
 };
 
 export const incrementViewCount = async (postId: string): Promise<void> => {
-  const adminSupabase = getSupabaseAdminClient();
+  let adminSupabase: SupabaseClient;
+  try {
+    adminSupabase = getSupabaseAdminClient();
+  } catch (e: any) {
+    // For view count, we might not want to throw a hard error that crashes a page view
+    // if only the service key is misconfigured for this non-critical background op.
+    console.error('Failed to initialize Supabase admin client for incrementViewCount (non-critical):', e.message);
+    return; // Silently fail if admin client can't be initialized for this
+  }
+
   const { error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
 
   if (error) {
     // Not throwing an error here as it's a non-critical background operation for the user
-    console.error('Error incrementing view count (raw Supabase error):', JSON.stringify(error, null, 2));
+    console.warn('Error incrementing view count (raw Supabase error):', JSON.stringify(error, null, 2));
   }
 };
 
