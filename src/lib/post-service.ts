@@ -122,7 +122,7 @@ const initialPostsData: Post[] = [
     "date": "2024-05-01T10:00:00Z",
     "content": "\n      <p class=\"mb-4\">Next.js is a popular React framework for building server-rendered applications, static websites, and more. Version 14 introduces several exciting features and improvements, particularly around the App Router.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Installation</h2>\n      <p class=\"mb-4\">To create a new Next.js app, you can use the following command:</p>\n      <pre class=\"bg-muted p-4 rounded-md overflow-x-auto mb-4\"><code class=\"font-code\">npx create-next-app@latest</code></pre>\n      <p class=\"mb-4\">Follow the prompts to configure your project. We recommend choosing TypeScript and Tailwind CSS for a modern development experience.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">App Router</h2>\n      <p class=\"mb-4\">The App Router, introduced in Next.js 13 and refined in 14, provides a new way to structure your application using file-system routing within the <code class=\"font-code bg-muted px-1 rounded\">app</code> directory. It supports layouts, nested routes, loading UI, error handling, and more, out of the box.</p>\n      <p class=\"mb-4\">Key concepts include Server Components, Client Components, and Route Handlers for API endpoints.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Conclusion</h2>\n      <p>Next.js 14 continues to push the boundaries of web development, offering powerful tools and a great developer experience. Dive in and start building!</p>\n    ",
     "tags": ["Next.js", "JavaScript", "Web Development", "React"],
-    "thumbnailUrl": "https://placehold.co/600x400.png", 
+    "thumbnailUrl": "https://placehold.co/600x400.png?text=NextJS+14", 
     "viewCount": 150
   },
   {
@@ -132,12 +132,10 @@ const initialPostsData: Post[] = [
     "date": "2024-04-22T14:30:00Z",
     "content": "\n      <p class=\"mb-4\">Tailwind CSS is a utility-first CSS framework that provides low-level utility classes to build custom designs without writing any custom CSS.</p>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Core Concepts</h2>\n      <ul class=\"list-disc pl-5 mb-4 space-y-2\">\n        <li><strong>Utility-First:</strong> Style elements by applying pre-existing classes directly in your HTML.</li>\n        <li><strong>Responsive Design:</strong> Easily build responsive layouts using Tailwind’s screen variant prefixes (e.g., <code class=\"font-code bg-muted px-1 rounded\">md:text-lg</code>).</li>\n        <li><strong>Customization:</strong> Highly customizable via the <code class=\"font-code bg-muted px-1 rounded\">tailwind.config.js</code> file.</li>\n      </ul>\n      <h2 class=\"text-2xl font-headline mt-6 mb-3\">Productivity Boost</h2>\n      <p class=\"mb-4\">Tailwind CSS significantly speeds up UI development by eliminating the need to switch between HTML and CSS files constantly. It also helps maintain consistency across your project.</p>\n      <p class=\"mb-4\">Embrace the utility-first workflow and see your productivity soar!</p>\n    ",
     "tags": ["Tailwind CSS", "CSS", "Frontend", "UI Design"],
-    "thumbnailUrl": "https://placehold.co/600x400.png", 
+    "thumbnailUrl": "https://placehold.co/600x400.png?text=TailwindCSS", 
     "viewCount": 275
   }
 ];
 
-// Initialize posts.json with placeholder data if it doesn't exist
-// No longer creating local placeholder thumbnails.
 ensurePostsFileExists(initialPostsData)
   .catch(console.error);
