@@ -242,9 +242,6 @@ const siteSettingsSchema = z.object({
   adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
   adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
 }).superRefine((data, ctx) => {
-  // If either adminUsername or adminPassword is provided, both must be provided.
-  // This ensures that we don't have a username without a password or vice-versa,
-  // unless both are empty (meaning admin auth is not yet set up).
   const usernameProvided = data.adminUsername && data.adminUsername.length > 0;
   const passwordProvided = data.adminPassword && data.adminPassword.length > 0;
 
@@ -311,7 +308,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     await settingsService.updateSettings(settingsToUpdate);
     revalidatePath('/'); 
     revalidatePath('/admin/settings'); 
-    revalidatePath('/login'); // In case admin credentials change
+    revalidatePath('/login'); 
     
     return {
       success: true,
@@ -348,11 +345,10 @@ export async function loginAction(
   }
 
   const isValidUsername = username === settings.adminUsername;
-  // WARNING: Plaintext password comparison. NOT FOR PRODUCTION.
   const isValidPassword = password === settings.adminPassword;
 
   if (isValidUsername && isValidPassword) {
-    cookies().set(SESSION_COOKIE_NAME, 'true', { // Store a simple 'true' string or a JWT in a real app
+    cookies().set(SESSION_COOKIE_NAME, 'true', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -360,7 +356,12 @@ export async function loginAction(
       sameSite: 'lax',
     });
     revalidatePath('/admin');
-    return { message: 'Login successful!', success: true };
+    revalidatePath('/login'); // Revalidate login page too
+    redirect('/admin'); // Perform redirect directly from server action
+    // The following return will not be reached if redirect() is called,
+    // but it satisfies the function signature for useActionState if redirect was conditional.
+    // In this case, redirect always happens on success.
+    // return { message: 'Login successful!', success: true }; 
   } else {
     return { message: 'Invalid username or password.', success: false };
   }
