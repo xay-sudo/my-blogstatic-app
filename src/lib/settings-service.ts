@@ -5,7 +5,6 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs/promises';
 import path from 'path';
 
-// For initial data seeding from JSON if DB is empty
 const dataDir = path.join(process.cwd(), 'data');
 const settingsJsonFilePath = path.join(dataDir, 'settings.json');
 let initialSettingsDataLoaded = false;
@@ -24,13 +23,27 @@ const DEFAULT_SETTINGS_OBJ: SiteSettings = {
   adminPassword: '',
 };
 
+// Helper function to validate HTTP/HTTPS URL format for internal use
+function isValidHttpUrl(string: string | undefined | null): boolean {
+  if (!string) return false;
+  try {
+    const url = new URL(string);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
+}
+
 // Helper function to create a Supabase admin client (uses service_role key)
 function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error('Supabase URL or Service Role Key is not configured for admin actions.');
+  if (!isValidHttpUrl(supabaseUrl)) {
+    throw new Error(`CRITICAL: NEXT_PUBLIC_SUPABASE_URL is invalid for admin client. Value: "${supabaseUrl}". Please check environment variables.`);
+  }
+  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
+    throw new Error(`CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured or invalid for admin actions. Please check environment variables.`);
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
@@ -51,8 +64,8 @@ async function seedInitialSettingsFromJson() {
       .eq('id', 1)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
-      console.warn('Could not check site_settings in DB for seeding:', fetchError.message);
+    if (fetchError && fetchError.code !== 'PGRST116') { 
+      console.warn('Could not check site_settings in DB for seeding:', JSON.stringify(fetchError, null, 2));
       initialSettingsDataLoaded = true;
       return;
     }
@@ -67,7 +80,7 @@ async function seedInitialSettingsFromJson() {
         if (fileError.code !== 'ENOENT') {
           console.warn('Could not read or parse settings.json for initial seeding, using defaults:', fileError.message);
         } else {
-          console.log('settings.json not found, using default settings for initial seed. This is normal if starting fresh.');
+          console.log('settings.json not found, using default settings for initial seed.');
         }
       }
       
@@ -77,7 +90,7 @@ async function seedInitialSettingsFromJson() {
         .upsert({ id: 1, settings: settingsFromFile }, { onConflict: 'id' });
 
       if (upsertError) {
-        console.error('Error seeding site settings to Supabase:', upsertError);
+        console.error('Error seeding site settings to Supabase:', JSON.stringify(upsertError, null, 2));
       } else {
         console.log('Successfully seeded site settings to Supabase from settings.json/defaults.');
       }
@@ -100,14 +113,29 @@ export async function getSettings(): Promise<SiteSettings> {
     .eq('id', 1)
     .single();
 
-  if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
-    console.error('Error fetching settings from Supabase:', error);
-    return { ...DEFAULT_SETTINGS_OBJ };
+  if (error) { // Check if error object exists and is not null/undefined
+    // Log detailed error information
+    const errorDetails = {
+      message: (error as any).message,
+      code: (error as any).code,
+      details: (error as any).details,
+      hint: (error as any).hint,
+      fullErrorObject: JSON.stringify(error, null, 2)
+    };
+    console.error('Error fetching settings from Supabase:', errorDetails);
+
+    // If it's specifically 'PGRST116' (row not found), it's not a "critical" error for this function's purpose,
+    // as it means the settings row just doesn't exist yet, and we should return defaults.
+    // For any other error code, OR if error.code is missing (like when error is {}),
+    // it's a more problematic issue, so we log it and return defaults.
+    if ((error as any).code !== 'PGRST116') {
+        return { ...DEFAULT_SETTINGS_OBJ };
+    }
+    // If error.code IS 'PGRST116', it means no settings row. We'll proceed to the !data check below,
+    // which will also lead to returning default settings.
   }
 
   if (!data || !data.settings) {
-    // No settings in DB, return defaults
-    // This could happen if seeding failed and table is empty.
     return { ...DEFAULT_SETTINGS_OBJ };
   }
 
@@ -116,11 +144,10 @@ export async function getSettings(): Promise<SiteSettings> {
 
 export async function updateSettings(newSettings: Partial<SiteSettings>): Promise<SiteSettings> {
   const adminSupabase = getSupabaseAdminClient();
-  const currentSettings = await getSettings(); // Get current to merge
+  const currentSettings = await getSettings(); 
   
   const mergedSettings: Partial<SiteSettings> = { ...currentSettings, ...newSettings };
 
-  // Ensure types are correct after merge, especially for form data
   if (typeof mergedSettings.postsPerPage === 'string') {
     mergedSettings.postsPerPage = parseInt(mergedSettings.postsPerPage, 10);
   }
@@ -133,17 +160,12 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
     mergedSettings.bannerEnabled = false;
   }
 
-
   if (newSettings.hasOwnProperty('adminUsername')) {
     mergedSettings.adminUsername = String(newSettings.adminUsername ?? '').trim();
   }
-  // Only update password if a new one is explicitly provided.
-  // If adminPassword is not in newSettings or is undefined, keep the existing one.
-  // If it's an empty string in newSettings, it means clear the password.
   if (newSettings.hasOwnProperty('adminPassword')) {
       mergedSettings.adminPassword = String(newSettings.adminPassword ?? '');
   }
-
 
   const { data: updatedData, error } = await adminSupabase
     .from('site_settings')
@@ -152,8 +174,8 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
     .single();
 
   if (error) {
-    console.error('Error updating settings in Supabase:', error);
-    throw new Error('Could not save settings. ' + error.message);
+    console.error('Error updating settings in Supabase:', JSON.stringify(error, null, 2));
+    throw new Error('Could not save settings. ' + (error.message || JSON.stringify(error)));
   }
 
   if (!updatedData || !updatedData.settings) {
@@ -163,7 +185,6 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   return { ...DEFAULT_SETTINGS_OBJ, ...(updatedData.settings as Partial<SiteSettings>) };
 }
 
-// Initial seeding check
 if (typeof window === 'undefined') {
  // Defer actual seeding to first function call.
 }

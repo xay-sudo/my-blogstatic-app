@@ -10,14 +10,27 @@ const dataDir = path.join(process.cwd(), 'data');
 const postsJsonFilePath = path.join(dataDir, 'posts.json');
 let initialPostsDataLoaded = false;
 
+// Helper function to validate HTTP/HTTPS URL format for internal use
+function isValidHttpUrl(string: string | undefined | null): boolean {
+  if (!string) return false;
+  try {
+    const url = new URL(string);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
+}
+
 // Helper function to create a Supabase admin client (uses service_role key)
-// This is specifically for operations requiring elevated privileges like incrementViewCount
 function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error('Supabase URL or Service Role Key is not configured for admin actions.');
+  if (!isValidHttpUrl(supabaseUrl)) {
+    throw new Error(`CRITICAL: NEXT_PUBLIC_SUPABASE_URL is invalid for admin client. Value: "${supabaseUrl}". Please check environment variables.`);
+  }
+  if (!supabaseServiceRoleKey || supabaseServiceRoleKey.length < 50) { // Basic length check
+    throw new Error(`CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured or invalid for admin actions. Please check environment variables.`);
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
@@ -35,9 +48,8 @@ async function seedInitialPostsFromJson() {
   try {
     const { count, error: countError } = await supabase.from('posts').select('*', { count: 'exact', head: true });
     if (countError) {
-      console.warn('Could not check post count in DB for seeding:', countError.message);
-      // Don't proceed if we can't verify DB state
-      initialPostsDataLoaded = true; // Mark as attempted
+      console.warn('Could not check post count in DB for seeding:', JSON.stringify(countError, null, 2));
+      initialPostsDataLoaded = true; 
       return;
     }
 
@@ -47,7 +59,7 @@ async function seedInitialPostsFromJson() {
       const postsFromFile = JSON.parse(jsonData) as Post[];
 
       const postsToInsert = postsFromFile.map(p => ({
-        id: p.id, // Use existing ID from JSON
+        id: p.id, 
         slug: p.slug,
         title: p.title,
         date: p.date,
@@ -58,9 +70,10 @@ async function seedInitialPostsFromJson() {
       }));
 
       if (postsToInsert.length > 0) {
-        const { error: insertError } = await supabase.from('posts').insert(postsToInsert);
+        const adminSupabase = getSupabaseAdminClient();
+        const { error: insertError } = await adminSupabase.from('posts').insert(postsToInsert);
         if (insertError) {
-          console.error('Error seeding posts to Supabase:', insertError);
+          console.error('Error seeding posts to Supabase:', JSON.stringify(insertError, null, 2));
         } else {
           console.log(`Successfully seeded ${postsToInsert.length} posts from posts.json to Supabase.`);
         }
@@ -69,20 +82,19 @@ async function seedInitialPostsFromJson() {
       console.log('Posts table is not empty. Skipping seeding from JSON.');
     }
   } catch (error: any) {
-    // This handles fs.readFile error or JSON.parse error
-    if (error.code !== 'ENOENT') { // ENOENT means posts.json doesn't exist, which is fine
+    if (error.code !== 'ENOENT') { 
         console.warn('Could not read or parse posts.json for initial seeding:', error.message);
     } else {
-        console.log('posts.json not found, skipping initial seeding. This is normal if starting fresh.');
+        console.log('posts.json not found, skipping initial seeding.');
     }
   } finally {
-    initialPostsDataLoaded = true; // Mark as attempted/done
+    initialPostsDataLoaded = true; 
   }
 }
 
 
 export const getAllPosts = async (): Promise<Post[]> => {
-  await seedInitialPostsFromJson(); // Attempt to seed if this is the first call
+  await seedInitialPostsFromJson(); 
 
   const { data, error } = await supabase
     .from('posts')
@@ -90,7 +102,7 @@ export const getAllPosts = async (): Promise<Post[]> => {
     .order('date', { ascending: false });
 
   if (error) {
-    console.error('Error fetching posts:', error);
+    console.error('Error fetching posts:', JSON.stringify(error, null, 2));
     return [];
   }
   return data.map(p => ({ ...p, thumbnailUrl: p.thumbnail_url, viewCount: p.view_count })) as Post[];
@@ -105,8 +117,8 @@ export const getPostBySlug = async (slug: string): Promise<Post | undefined> => 
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined; // Post not found
-    console.error('Error fetching post by slug:', error);
+    if (error.code === 'PGRST116') return undefined; 
+    console.error('Error fetching post by slug:', JSON.stringify(error, null, 2));
     return undefined;
   }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
@@ -121,38 +133,40 @@ export const getPostById = async (id: string): Promise<Post | undefined> => {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return undefined; // Post not found
-    console.error('Error fetching post by ID:', error);
+    if (error.code === 'PGRST116') return undefined; 
+    console.error('Error fetching post by ID:', JSON.stringify(error, null, 2));
     return undefined;
   }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
 };
 
 export const addPost = async (newPostData: Omit<Post, 'id' | 'date' | 'viewCount'> & { viewCount?: number }): Promise<Post> => {
+  const adminSupabase = getSupabaseAdminClient();
   const postToInsert = {
     slug: newPostData.slug,
     title: newPostData.title,
     content: newPostData.content,
     tags: newPostData.tags,
     thumbnail_url: newPostData.thumbnailUrl,
-    date: new Date().toISOString(), // Set server-side
+    date: new Date().toISOString(), 
     view_count: newPostData.viewCount || 0,
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await adminSupabase
     .from('posts')
     .insert(postToInsert)
     .select()
     .single();
 
   if (error) {
-    console.error('Error adding post:', error);
-    throw new Error('Could not add post. ' + error.message);
+    console.error('Error adding post:', JSON.stringify(error, null, 2));
+    throw new Error('Could not add post. ' + (error.message || JSON.stringify(error)));
   }
   return { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post;
 };
 
 export const updatePost = async (postId: string, updatedPostData: Partial<Omit<Post, 'id' | 'date'>>): Promise<Post | undefined> => {
+  const adminSupabase = getSupabaseAdminClient();
   const postToUpdate: { [key: string]: any } = {};
   if (updatedPostData.slug) postToUpdate.slug = updatedPostData.slug;
   if (updatedPostData.title) postToUpdate.title = updatedPostData.title;
@@ -160,13 +174,12 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
   if (updatedPostData.tags) postToUpdate.tags = updatedPostData.tags;
   if (updatedPostData.hasOwnProperty('thumbnailUrl')) postToUpdate.thumbnail_url = updatedPostData.thumbnailUrl;
   if (updatedPostData.viewCount !== undefined) postToUpdate.view_count = updatedPostData.viewCount;
-  // `date` is not typically updated, `updated_at` is handled by DB trigger
-
+  
   if (Object.keys(postToUpdate).length === 0) {
-    return getPostById(postId); // No actual changes
+    return getPostById(postId); 
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await adminSupabase
     .from('posts')
     .update(postToUpdate)
     .eq('id', postId)
@@ -174,47 +187,34 @@ export const updatePost = async (postId: string, updatedPostData: Partial<Omit<P
     .single();
 
   if (error) {
-    console.error('Error updating post:', error);
-    throw new Error('Could not update post. ' + error.message);
+    console.error('Error updating post:', JSON.stringify(error, null, 2));
+    throw new Error('Could not update post. ' + (error.message || JSON.stringify(error)));
   }
   return data ? { ...data, thumbnailUrl: data.thumbnail_url, viewCount: data.view_count } as Post : undefined;
 };
 
 export const deletePostById = async (postId: string): Promise<void> => {
-  const { error } = await supabase
+  const adminSupabase = getSupabaseAdminClient();
+  const { error } = await adminSupabase
     .from('posts')
     .delete()
     .eq('id', postId);
 
   if (error) {
-    console.error('Error deleting post:', error);
-    throw new Error('Could not delete post. ' + error.message);
+    console.error('Error deleting post:', JSON.stringify(error, null, 2));
+    throw new Error('Could not delete post. ' + (error.message || JSON.stringify(error)));
   }
 };
 
 export const incrementViewCount = async (postId: string): Promise<void> => {
-  const adminSupabase = getSupabaseAdminClient(); // Use admin client for this operation
+  const adminSupabase = getSupabaseAdminClient(); 
   const { error } = await adminSupabase.rpc('increment_post_view_count', { post_id_arg: postId });
 
   if (error) {
-    console.error('Error incrementing view count:', error);
-    // Don't throw, as this is a non-critical background operation
+    console.error('Error incrementing view count:', JSON.stringify(error, null, 2));
   }
 };
 
-// You need to create this RPC function in your Supabase SQL Editor:
-// CREATE OR REPLACE FUNCTION increment_post_view_count(post_id_arg UUID)
-// RETURNS VOID AS $$
-// BEGIN
-//   UPDATE public.posts
-//   SET view_count = view_count + 1
-//   WHERE id = post_id_arg;
-// END;
-// $$ LANGUAGE plpgsql;
-
-// Call seedInitialPostsFromJson once when the module loads, but ensure it's non-blocking for server start
-// The actual check and seed will happen on the first service call.
-if (typeof window === 'undefined') { // Run only on server-side
-  // seedInitialPostsFromJson().catch(console.error); // This might run too early or too often.
+if (typeof window === 'undefined') {
   // Defer actual seeding to first function call.
 }
