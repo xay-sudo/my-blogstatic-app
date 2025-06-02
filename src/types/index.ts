@@ -21,4 +21,8 @@ export interface SiteSettings {
   bannerImageLink?: string;
   bannerImageAltText?: string;
   bannerCustomHtml?: string;
+  // Local Admin Auth
+  adminUsername?: string;
+  adminPassword?: string; // WARNING: Stored in plaintext for local demo only. NOT SECURE.
 }
+

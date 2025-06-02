@@ -10,6 +10,7 @@ import * as z from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
 import { ensureDir } from 'fs-extra';
+import { cookies } from 'next/headers';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -20,7 +21,6 @@ const PUBLIC_UPLOADS_PATH = `/${UPLOADS_DIR_NAME}/${THUMBNAILS_SUBDIR_NAME}`;
 const SERVER_UPLOADS_FULL_PATH = path.join(process.cwd(), 'public', UPLOADS_DIR_NAME, THUMBNAILS_SUBDIR_NAME);
 
 
-// Schema for text fields from the form
 const postTextFormSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters long.' }).max(255, { message: 'Title must be 255 characters or less.' }),
   slug: z.string().min(3, { message: 'Slug must be at least 3 characters long.' }).max(150, { message: 'Slug must be 150 characters or less.' }).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'Slug must be lowercase alphanumeric with hyphens.' }),
@@ -123,7 +123,7 @@ export async function createPostAction(formData: FormData) {
 
   } catch (error: any) {
     console.error('Failed to create post:', error);
-    if (thumbnailUrl) await deleteLocalFile(thumbnailUrl); // Attempt to clean up if created
+    if (thumbnailUrl) await deleteLocalFile(thumbnailUrl); 
     return {
       success: false,
       message: error.message || 'Could not create post.',
@@ -168,7 +168,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
     let currentThumbnailUrl = existingPost.thumbnailUrl;
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
-      // Delete old local file if it exists and a new one is being uploaded
       if (currentThumbnailUrl && currentThumbnailUrl.startsWith(PUBLIC_UPLOADS_PATH)) {
         await deleteLocalFile(currentThumbnailUrl);
       }
@@ -186,7 +185,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      // If update failed but a new file was uploaded, try to clean it up
       if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
       return {
         success: false,
@@ -196,7 +194,6 @@ export async function updatePostAction(postId: string, formData: FormData) {
     }
   } catch (error: any) {
     console.error('Failed to update post:', error);
-    // If an error occurred and a new file was uploaded, try to clean it up
     if (newUrlUploaded) await deleteLocalFile(newUrlUploaded);
     return {
       success: false,
@@ -242,7 +239,33 @@ const siteSettingsSchema = z.object({
   bannerImageLink: z.string().url({ message: 'Please enter a valid URL for the banner link.' }).optional().or(z.literal('')),
   bannerImageAltText: z.string().max(120, {message: 'Alt text should be 120 characters or less.'}).optional(),
   bannerCustomHtml: z.string().optional(),
+  adminUsername: z.string().min(3, {message: "Admin username must be at least 3 characters."}).max(50, {message: "Admin username must be 50 characters or less."}).optional().or(z.literal('')),
+  adminPassword: z.string().min(6, {message: "Admin password must be at least 6 characters."}).max(100, {message: "Admin password must be 100 characters or less."}).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  // If either adminUsername or adminPassword is provided, both must be provided.
+  // This ensures that we don't have a username without a password or vice-versa,
+  // unless both are empty (meaning admin auth is not yet set up).
+  const usernameProvided = data.adminUsername && data.adminUsername.length > 0;
+  const passwordProvided = data.adminPassword && data.adminPassword.length > 0;
+
+  if (usernameProvided !== passwordProvided) {
+    if (usernameProvided && !passwordProvided) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Password is required if username is set.",
+        path: ['adminPassword'],
+      });
+    }
+    if (passwordProvided && !usernameProvided) {
+       ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Username is required if password is set.",
+        path: ['adminUsername'],
+      });
+    }
+  }
 });
+
 
 export async function updateSiteSettingsAction(formData: FormData) {
   const rawData = {
@@ -255,6 +278,8 @@ export async function updateSiteSettingsAction(formData: FormData) {
     bannerImageLink: formData.get('bannerImageLink'),
     bannerImageAltText: formData.get('bannerImageAltText'),
     bannerCustomHtml: formData.get('bannerCustomHtml'),
+    adminUsername: formData.get('adminUsername'),
+    adminPassword: formData.get('adminPassword'),
   };
 
   const validation = siteSettingsSchema.safeParse(rawData);
@@ -279,11 +304,14 @@ export async function updateSiteSettingsAction(formData: FormData) {
       bannerImageLink: validation.data.bannerImageLink,
       bannerImageAltText: validation.data.bannerImageAltText,
       bannerCustomHtml: validation.data.bannerCustomHtml,
+      adminUsername: validation.data.adminUsername,
+      adminPassword: validation.data.adminPassword,
     };
 
     await settingsService.updateSettings(settingsToUpdate);
     revalidatePath('/'); 
     revalidatePath('/admin/settings'); 
+    revalidatePath('/login'); // In case admin credentials change
     
     return {
       success: true,
@@ -300,4 +328,47 @@ export async function updateSiteSettingsAction(formData: FormData) {
   }
 }
 
-    
+const SESSION_COOKIE_NAME = 'newstoday-adminsession';
+
+export async function loginAction(
+  prevState: { message?: string; success?: boolean } | undefined,
+  formData: FormData
+): Promise<{ message?: string; success?: boolean }> {
+  const username = formData.get('username') as string;
+  const password = formData.get('password') as string;
+
+  if (!username || !password) {
+    return { message: 'Username and password are required.', success: false };
+  }
+
+  const settings = await settingsService.getSettings();
+
+  if (!settings.adminUsername || !settings.adminPassword) {
+    return { message: 'Admin account is not configured. Please set it up in Site Settings.', success: false };
+  }
+
+  const isValidUsername = username === settings.adminUsername;
+  // WARNING: Plaintext password comparison. NOT FOR PRODUCTION.
+  const isValidPassword = password === settings.adminPassword;
+
+  if (isValidUsername && isValidPassword) {
+    cookies().set(SESSION_COOKIE_NAME, 'true', { // Store a simple 'true' string or a JWT in a real app
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: '/',
+      sameSite: 'lax',
+    });
+    revalidatePath('/admin');
+    return { message: 'Login successful!', success: true };
+  } else {
+    return { message: 'Invalid username or password.', success: false };
+  }
+}
+
+export async function logoutAction() {
+  cookies().delete(SESSION_COOKIE_NAME);
+  revalidatePath('/admin');
+  revalidatePath('/login');
+  redirect('/login');
+}

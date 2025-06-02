@@ -2,16 +2,33 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, FileText, LayoutDashboard, Settings } from 'lucide-react';
-// Removed LogOut, useAuth, useRouter, useEffect, Button, Skeleton
+import { Home, FileText, LayoutDashboard, Settings, LogOut } from 'lucide-react';
+import { logoutAction } from '@/app/actions';
+import { Button } from '@/components/ui/button';
+import { useTransition } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation'; // For redirect after logout
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // All authentication-related logic, loading states, and redirection are removed.
-  // The admin panel is now directly accessible.
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    startTransition(async () => {
+      try {
+        await logoutAction();
+        toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+        // router.push('/login') will be handled by middleware or redirect in action
+      } catch (error) {
+        toast({ variant: 'destructive', title: 'Logout Failed', description: 'Could not log out.' });
+      }
+    });
+  };
 
   return (
     <div className="flex min-h-screen bg-muted/40">
@@ -45,7 +62,12 @@ export default function AdminLayout({
             <span>Site Settings</span>
           </Link>
         </nav>
-        {/* Logout button removed */}
+        <form action={handleLogout}>
+          <Button variant="outline" className="w-full" type="submit" disabled={isPending}>
+            <LogOut className="w-5 h-5 mr-2" />
+            {isPending ? 'Logging out...' : 'Logout'}
+          </Button>
+        </form>
       </aside>
       <div className="flex flex-col flex-grow">
         <main className="flex-grow p-6 lg:p-8">

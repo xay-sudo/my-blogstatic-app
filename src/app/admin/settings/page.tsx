@@ -38,18 +38,21 @@ function SettingsPageSkeleton() {
             </div>
             <Skeleton className="h-6 w-12" />
           </div>
-          <div className="mt-6 space-y-6 pl-2 ml-1">
-             <Skeleton className="h-5 w-1/5 mb-2" />
-             <div className="flex space-x-4">
-                <Skeleton className="h-5 w-20" />
-                <Skeleton className="h-5 w-24" />
-             </div>
-            <div className="space-y-4 p-4 border rounded-md">
-                <Skeleton className="h-5 w-1/4" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-5 w-1/4" />
-                <Skeleton className="h-10 w-full" />
-            </div>
+        </div>
+
+        <Skeleton className="h-px w-full" />
+
+        {/* Admin Auth Skeletons */}
+        <div>
+          <Skeleton className="h-6 w-1/3 mb-4" />
+           <Skeleton className="h-20 w-full mb-4" /> {/* For Alert */}
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-1/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2 mt-4">
+            <Skeleton className="h-5 w-1/4" />
+            <Skeleton className="h-10 w-full" />
           </div>
         </div>
         
@@ -64,19 +67,22 @@ function SettingsPageSkeleton() {
 
 export default async function AdminSettingsPage() {
   const currentSettings = await getSettings();
-  // Fallback in case settings are not fully formed, though getSettings should handle defaults.
-  const initialData = {
-    siteTitle: currentSettings.siteTitle || "Newstoday",
-    siteDescription: currentSettings.siteDescription || "Your awesome blog.",
-    postsPerPage: currentSettings.postsPerPage || 6,
-    bannerEnabled: currentSettings.bannerEnabled || false,
-    bannerType: currentSettings.bannerType || 'image',
-    bannerImageUrl: currentSettings.bannerImageUrl || '',
-    bannerImageLink: currentSettings.bannerImageLink || '',
-    bannerImageAltText: currentSettings.bannerImageAltText || 'Banner',
-    bannerCustomHtml: currentSettings.bannerCustomHtml || '',
+  // Ensure all expected fields for SiteSettings are present, falling back to defaults from service if needed
+  const initialData: SiteSettings = {
+    siteTitle: currentSettings.siteTitle,
+    siteDescription: currentSettings.siteDescription,
+    postsPerPage: currentSettings.postsPerPage,
+    bannerEnabled: currentSettings.bannerEnabled,
+    bannerType: currentSettings.bannerType,
+    bannerImageUrl: currentSettings.bannerImageUrl,
+    bannerImageLink: currentSettings.bannerImageLink,
+    bannerImageAltText: currentSettings.bannerImageAltText,
+    bannerCustomHtml: currentSettings.bannerCustomHtml,
+    adminUsername: currentSettings.adminUsername,
+    adminPassword: currentSettings.adminPassword, // Will be used to check if one exists, but not pre-filled
   };
   return <ClientSettingsPage initialSettings={initialData} />;
 }
 
-export const dynamic = 'force-dynamic'; // Ensure fresh data on each load for settings
+export const dynamic = 'force-dynamic'; 
+export const revalidate = 0; // Ensure fresh data on each load for settings

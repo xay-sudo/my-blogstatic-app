@@ -17,6 +17,8 @@ const DEFAULT_SETTINGS: SiteSettings = {
   bannerImageLink: '',
   bannerImageAltText: 'Banner',
   bannerCustomHtml: '',
+  adminUsername: '', // Default empty, user should set this
+  adminPassword: '', // Default empty, user should set this. WARNING: Plaintext.
 };
 
 async function ensureSettingsFileExists(): Promise<void> {
@@ -48,17 +50,24 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
     const currentSettings = await getSettings();
     const updatedSettings = { ...currentSettings, ...newSettings };
     
-    // Ensure postsPerPage is a number
     if (typeof updatedSettings.postsPerPage === 'string') {
         updatedSettings.postsPerPage = parseInt(updatedSettings.postsPerPage, 10);
     }
     if (isNaN(updatedSettings.postsPerPage) || updatedSettings.postsPerPage <= 0) {
-        updatedSettings.postsPerPage = DEFAULT_SETTINGS.postsPerPage; // Fallback to default if invalid
+        updatedSettings.postsPerPage = DEFAULT_SETTINGS.postsPerPage; 
     }
 
-    // Ensure bannerEnabled is boolean
     if (typeof updatedSettings.bannerEnabled === 'string') {
       updatedSettings.bannerEnabled = updatedSettings.bannerEnabled === 'true';
+    }
+
+    // Ensure adminUsername and adminPassword are treated as strings
+    if (newSettings.hasOwnProperty('adminUsername')) {
+        updatedSettings.adminUsername = String(newSettings.adminUsername ?? '').trim();
+    }
+    if (newSettings.hasOwnProperty('adminPassword')) {
+        // Password is intentionally not trimmed to allow spaces if desired
+        updatedSettings.adminPassword = String(newSettings.adminPassword ?? '');
     }
 
 
@@ -71,5 +80,5 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   }
 }
 
-// Initialize settings.json if it doesn't exist
 ensureSettingsFileExists().catch(console.error);
+
