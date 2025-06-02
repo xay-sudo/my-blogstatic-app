@@ -189,10 +189,10 @@ export default function NewPostPage() {
   };
 
 
-  const handleSuggestTags = async () => {
-    const content = editorRef.current ? editorRef.current.getContent() : form.getValues('content');
+  const handleSuggestTags = async (contentToUse?: string) => {
+    const content = contentToUse || (editorRef.current ? editorRef.current.getContent() : form.getValues('content'));
     if (!content || content.trim().length < 50) {
-      setAiTagsError('Please write more content (at least 50 characters) before suggesting tags.');
+      setAiTagsError('Content is too short (less than 50 characters) to suggest tags effectively.');
       setSuggestedAiTags([]);
       return;
     }
@@ -208,7 +208,9 @@ export default function NewPostPage() {
       if (newSuggestions.length === 0 && result.tags.length > 0) {
         toast({ title: "AI Suggestions", description: "All suggested tags are already in your list or no new unique tags found."});
       } else if (newSuggestions.length === 0) {
-        toast({ title: "AI Suggestions", description: "No new tags suggested."});
+        toast({ title: "AI Suggestions", description: "No new tags suggested by AI."});
+      } else {
+        toast({ title: "AI Tags Suggested!", description: "Review the suggestions below."});
       }
     } catch (e) {
       console.error('Error suggesting tags:', e);
@@ -244,6 +246,8 @@ export default function NewPostPage() {
     setScrapingError(null);
     setThumbnailFile(null); 
     setThumbnailPreview(null); 
+    setSuggestedAiTags([]);
+    setAiTagsError(null);
   
     toast({ title: "Fetching Content...", description: "Attempting to scrape content from the URL. This may take a moment." });
 
@@ -333,9 +337,17 @@ export default function NewPostPage() {
         }
       }
       
-      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Please review and adjust as needed." });
+      toast({ title: `Content Populated: "${populatedTitle}"`, description: "Form fields have been populated. Review and adjust. AI tag suggestions will follow." });
       
       await autoProcessScrapedThumbnail(scrapedData.thumbnailDataUri, scrapedData.thumbnailUrl);
+
+      // Automatically suggest tags after content is populated
+      if (scrapedData.content && scrapedData.content.trim().length >= 50) {
+        await handleSuggestTags(scrapedData.content);
+      } else if (scrapedData.content) {
+        setAiTagsError('Scraped content is too short (less than 50 characters) for effective AI tag suggestions.');
+        setSuggestedAiTags([]);
+      }
   
     } catch (error: any) { 
       console.error("Error calling /api/scrape:", error);
@@ -652,7 +664,7 @@ export default function NewPostPage() {
                   <div className="mt-3 space-y-2">
                     <Button 
                       type="button" 
-                      onClick={handleSuggestTags} 
+                      onClick={() => handleSuggestTags()} 
                       disabled={isSuggestingTags || isSubmittingForm || !form.getValues('content') || form.getValues('content').length < 50 || isScraping || isProcessingScrapedThumbnail }
                       variant="outline"
                       size="sm"
@@ -694,7 +706,12 @@ export default function NewPostPage() {
                         </div>
                       </div>
                     )}
-                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && (
+                    {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length >= 50 && (
+                        <p className="text-xs text-muted-foreground">
+                          Content is ready. Click the button above to get AI tag suggestions.
+                        </p>
+                      )}
+                     {suggestedAiTags.length === 0 && !isSuggestingTags && !aiTagsError && form.getValues('content').length < 50 && (
                         <p className="text-xs text-muted-foreground">
                           Write some content (at least 50 characters) and click the button above to get tag suggestions.
                         </p>
@@ -723,3 +740,4 @@ export default function NewPostPage() {
     </Card>
   );
 }
+
