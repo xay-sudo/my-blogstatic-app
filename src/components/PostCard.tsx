@@ -4,7 +4,7 @@ import Image from 'next/image';
 import type { Post } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 // TagBadge is no longer used directly in the card for a minimal look
-import { CalendarDays, Eye } from 'lucide-react'; // ArrowRight removed
+import { CalendarDays, BookOpen } from 'lucide-react'; // Changed Eye to BookOpen
 
 interface PostCardProps {
   post: Post;
@@ -46,7 +46,7 @@ export default function PostCard({ post }: PostCardProps) {
             <time dateTime={post.date}>{formattedDate}</time>
           </div>
           <div className="flex items-center">
-            <Eye className="w-3.5 h-3.5 mr-1" />
+            <BookOpen className="w-3.5 h-3.5 mr-1" /> 
             <span>{post.viewCount ?? 0}</span>
           </div>
         </div>

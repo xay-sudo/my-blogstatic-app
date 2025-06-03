@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import { CalendarDays, Eye } from 'lucide-react'; 
+import { CalendarDays, BookOpen } from 'lucide-react'; // Changed Eye to BookOpen
 import PostCard from '@/components/PostCard'; 
 import type { Post } from '@/types'; 
 import SocialShareButtons from '@/components/SocialShareButtons';
@@ -99,8 +99,8 @@ export default async function PostPage({ params }: PostPageProps) {
               <time dateTime={post.date}>{formattedDate}</time>
             </div>
             <div className="flex items-center">
-              <Eye className="w-4 h-4 mr-1.5" />
-              <span>{post.viewCount ?? 0} views</span>
+              <BookOpen className="w-4 h-4 mr-1.5" /> 
+              <span>{post.viewCount ?? 0} Reads</span>
             </div>
           </div>
           {post.thumbnailUrl && (
