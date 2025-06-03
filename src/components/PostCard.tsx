@@ -20,7 +20,7 @@ export default function PostCard({ post }: PostCardProps) {
   const displayImageUrl = post.thumbnailUrl;
 
   return (
-    <Card className="overflow-hidden border bg-card hover:bg-card/95 dark:hover:bg-card/90 transition-colors duration-200 flex flex-col h-full group rounded-lg">
+    <Card className="overflow-hidden border bg-card hover:bg-card/95 dark:hover:bg-card/90 transition-colors duration-200 flex flex-col h-full group rounded-lg shadow-sm hover:shadow-md">
       {displayImageUrl && (
         <Link href={`/posts/${post.slug}`} className="block overflow-hidden aspect-[16/9] relative">
           <Image
@@ -29,37 +29,32 @@ export default function PostCard({ post }: PostCardProps) {
             fill
             style={{objectFit:"cover"}}
             className="group-hover:scale-105 transition-transform duration-300 ease-in-out"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
             data-ai-hint="article thumbnail"
           />
         </Link>
       )}
-      <CardHeader className="p-4">
+      <CardHeader className="p-3 sm:p-4">
         <Link href={`/posts/${post.slug}`}>
-          <CardTitle className="font-headline text-lg hover:text-primary transition-colors line-clamp-2 leading-tight">
+          <CardTitle className="font-headline text-base sm:text-lg hover:text-primary transition-colors line-clamp-2 leading-tight">
             {post.title}
           </CardTitle>
         </Link>
-        <div className="text-xs text-muted-foreground flex items-center mt-2 space-x-3">
+        <div className="text-xs text-muted-foreground flex items-center mt-1.5 space-x-2.5">
           <div className="flex items-center">
-            <CalendarDays className="w-3.5 h-3.5 mr-1" />
+            <CalendarDays className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" />
             <time dateTime={post.date}>{formattedDate}</time>
           </div>
           <div className="flex items-center">
-            <BookOpen className="w-3.5 h-3.5 mr-1" /> 
+            <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" /> 
             <span>{post.viewCount ?? 0}</span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-4 pb-4 pt-0 flex-grow">
-        {/* Minimal design, so no excerpt by default. Can be added if desired. */}
-        {/* 
-        <p className="text-sm text-muted-foreground line-clamp-3 mt-1">
-          A short summary or excerpt of the post could go here.
-        </p> 
-        */}
+      <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0 flex-grow">
+        {/* Minimal design, so no excerpt by default. */}
       </CardContent>
-      {/* Footer with tags and "Read More" link is removed for minimalism */}
     </Card>
   );
 }
+

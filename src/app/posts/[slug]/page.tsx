@@ -63,9 +63,9 @@ export default async function PostPage({ params }: PostPageProps) {
     relatedPosts = allPosts.filter(otherPost => {
       if (otherPost.id === post.id) return false; 
       return otherPost.tags.some(tag => post.tags.includes(tag));
-    }).slice(0, 3); 
+    }).slice(0, 4); 
   } else {
-    relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 3);
+    relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 4);
   }
 
   // Construct the full post URL for sharing
@@ -144,9 +144,9 @@ export default async function PostPage({ params }: PostPageProps) {
       </article>
 
       {relatedPosts.length > 0 && (
-        <section className="max-w-3xl mx-auto mt-12 py-8">
-          <h2 className="text-3xl font-headline font-bold text-primary mb-6">You may also like</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="max-w-4xl mx-auto mt-12 py-8"> {/* Changed max-w-3xl to max-w-4xl for better fit */}
+          <h2 className="text-3xl font-headline font-bold text-primary mb-6 text-center">You may also like</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Adjusted grid for 4 items */}
             {relatedPosts.map((relatedPost) => (
               <PostCard key={relatedPost.id} post={relatedPost} />
             ))}
@@ -158,3 +158,4 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
+
