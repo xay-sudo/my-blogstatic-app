@@ -41,6 +41,9 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
     };
   }, [isSearchOpen]);
 
+  // Check for a valid, non-empty siteLogoUrl
+  const hasValidLogo = siteSettings?.siteLogoUrl && siteSettings.siteLogoUrl.trim() !== '';
+
   return (
     <>
       {/* Main Header with Logo */}
@@ -48,13 +51,13 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
         <BannerAd settings={siteSettings} />
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
           <Link href="/" className="flex items-center gap-4 text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
-            {siteSettings?.siteLogoUrl ? (
+            {hasValidLogo ? (
               <Image
-                src={siteSettings.siteLogoUrl}
+                src={siteSettings.siteLogoUrl!} // Non-null assertion because hasValidLogo checks it
                 alt={siteSettings.siteTitle || 'Site Logo'}
-                width={240} // Adjusted for potentially wider logos at a taller height
-                height={64}  // Corresponds to h-16
-                className="h-16 w-auto object-contain" // Increased height
+                width={240}
+                height={64}
+                className="h-16 w-auto object-contain"
                 priority
                 data-ai-hint="company logo"
               />

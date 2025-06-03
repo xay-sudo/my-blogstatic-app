@@ -1,53 +1,42 @@
 'use client';
-
 import type React from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface RenderHtmlContentProps {
-  /**
-   * The HTML string to be rendered.
-   */
   htmlString: string;
 }
 
-/**
- * A client component that injects a raw HTML string directly into the document's <body>.
- * It renders null itself to avoid interfering with SSR/hydration,
- * then appends the parsed HTML content via useEffect on the client-side.
- * It also handles cleanup of the injected elements.
- */
 const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString }) => {
+  const [mounted, setMounted] = useState(false);
   const injectedNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
-    // Clear previously injected nodes
+    setMounted(true); // Set mounted to true once the component mounts on the client
+  }, []);
+
+  useEffect(() => {
+    // Cleanup previously injected nodes
     injectedNodesRef.current.forEach(node => {
-      if (node.parentNode === document.body) {
+      if (node.parentNode === document.body) { // Check parentNode before removing
         document.body.removeChild(node);
       }
     });
-    injectedNodesRef.current = [];
+    injectedNodesRef.current = []; // Clear the ref
 
-    if (htmlString && typeof window !== 'undefined' && document.body) {
+    if (mounted && htmlString && typeof window !== 'undefined' && document.body) {
       const tempContainer = document.createElement('div');
       tempContainer.innerHTML = htmlString;
-
-      const fragment = document.createDocumentFragment();
-      const newNodes: Node[] = [];
-      while (tempContainer.firstChild) {
-        const node = tempContainer.firstChild;
-        fragment.appendChild(node);
-        newNodes.push(node);
-      }
-
-      if (fragment.childNodes.length > 0) {
-        document.body.appendChild(fragment);
-        injectedNodesRef.current = newNodes;
-      }
+      
+      const nodesToAppend: Node[] = Array.from(tempContainer.childNodes);
+      
+      nodesToAppend.forEach(node => {
+        document.body.appendChild(node);
+        injectedNodesRef.current.push(node);
+      });
     }
 
-    // Cleanup function for when the component unmounts or htmlString changes
     return () => {
+      // Cleanup on unmount or when htmlString changes
       injectedNodesRef.current.forEach(node => {
         if (node.parentNode === document.body) {
           document.body.removeChild(node);
@@ -55,9 +44,9 @@ const RenderHtmlContent: React.FC<RenderHtmlContentProps> = ({ htmlString }) => 
       });
       injectedNodesRef.current = [];
     };
-  }, [htmlString]); // Re-run if htmlString changes
+  }, [mounted, htmlString]);
 
-  return null; // This component renders nothing itself into the React tree
+  return null;
 };
 
 export default RenderHtmlContent;

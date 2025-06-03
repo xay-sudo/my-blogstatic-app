@@ -9,6 +9,8 @@ import { cookies } from 'next/headers'; // Import cookies
 import RenderHtmlContent from '@/components/RenderHtmlContent';
 import HeadScriptInjector from '@/components/HeadScriptInjector';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
+import Link from 'next/link';
+import { Facebook, Twitter, Instagram, Linkedin, Youtube } from 'lucide-react';
 // BannerAd is no longer imported here as it's rendered within Header
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -49,8 +51,33 @@ export default async function RootLayout({
             {children}
           </main>
           <Toaster />
-          <footer className="py-6 text-center text-muted-foreground text-sm">
-            <p>&copy; {new Date().getFullYear()} {settings.siteTitle || 'Blogstatic'}. All rights reserved.</p>
+          <footer className="bg-muted/50 py-8 text-muted-foreground text-sm">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                <p className="text-center md:text-left">&copy; {new Date().getFullYear()} {settings.siteTitle || 'Blogstatic'}. All rights reserved.</p>
+                <nav className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2">
+                  <Link href="/contact" className="hover:text-primary transition-colors">Contact Us</Link>
+                  <Link href="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+                </nav>
+              </div>
+              <div className="flex justify-center md:justify-end items-center space-x-4 mt-6">
+                <a href="#" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="hover:text-primary transition-colors">
+                  <Facebook className="w-5 h-5" />
+                </a>
+                <a href="#" target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="hover:text-primary transition-colors">
+                  <Twitter className="w-5 h-5" />
+                </a>
+                <a href="#" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-primary transition-colors">
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a href="#" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="hover:text-primary transition-colors">
+                  <Linkedin className="w-5 h-5" />
+                </a>
+                 <a href="#" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="hover:text-primary transition-colors">
+                  <Youtube className="w-5 h-5" />
+                </a>
+              </div>
+            </div>
           </footer>
           {settings.globalFooterScriptsEnabled && settings.globalFooterScriptsCustomHtml && (
             <RenderHtmlContent
