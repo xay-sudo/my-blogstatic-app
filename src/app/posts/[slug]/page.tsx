@@ -65,7 +65,7 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  const newViewCount = await postService.incrementViewCount(post.id);
+  const newViewCount = await postService.incrementViewCount(String(post.id)); // Ensure ID is string for view count
 
   if (newViewCount !== null) {
     post = { ...post, viewCount: newViewCount };
@@ -82,43 +82,49 @@ export default async function PostPage({ params }: PostPageProps) {
   const MAX_RELATED_POSTS = 8;
 
   try {
-    const otherAvailablePosts = allPosts
-      .filter(p => p.id !== post!.id)
-      .map(p => ({ id: p.id, title: p.title }));
+    // Ensure post.id and p.id are strings when constructing otherAvailablePostsForAI
+    const otherAvailablePostsForAI = allPosts
+      .filter(p => String(p.id) !== String(post!.id)) // Compare as strings
+      .map(p => ({
+        id: String(p.id), // Explicitly convert to string
+        title: p.title
+      }));
 
-    if (otherAvailablePosts.length > 0) {
+    if (otherAvailablePostsForAI.length > 0) {
       const currentPostContentExcerpt = getExcerptFromHtml(post.content, 300);
-      const aiSuggestions = await suggestRelatedArticles({
-        currentPostId: post.id,
+
+      // Prepare input for AI, ensuring currentPostId is also a string
+      const aiInputPayload = {
+        currentPostId: String(post.id), // Explicitly convert current post's ID to string
         currentPostTitle: post.title,
         currentPostContentExcerpt: currentPostContentExcerpt,
-        availablePosts: otherAvailablePosts,
+        availablePosts: otherAvailablePostsForAI,
         count: MAX_RELATED_POSTS,
-      });
+      };
+      
+      const aiSuggestions = await suggestRelatedArticles(aiInputPayload);
 
       if (aiSuggestions.relatedPostIds.length > 0) {
-        const suggestedPostMap = new Map(allPosts.map(p => [p.id, p]));
+        const suggestedPostMap = new Map(allPosts.map(p => [String(p.id), p])); // Use string IDs for map
         relatedPosts = aiSuggestions.relatedPostIds
-          .map(id => suggestedPostMap.get(id))
+          .map(id => suggestedPostMap.get(String(id))) // Lookup with string ID
           .filter(p => p !== undefined) as Post[];
       }
     }
-    // If AI suggestions are fewer than max or AI didn't run, we might have less than MAX_RELATED_POSTS.
-    // If relatedPosts is still empty after AI attempt (or if AI wasn't called), apply tag-based fallback.
+    
     if (relatedPosts.length === 0 && post.tags && post.tags.length > 0) {
       console.log("AI provided no/few suggestions, trying tag-based related posts.");
       relatedPosts = allPosts.filter(otherPost => {
-        if (otherPost.id === post!.id) return false;
+        if (String(otherPost.id) === String(post!.id)) return false;
         return otherPost.tags.some(tag => post!.tags.includes(tag));
       }).slice(0, MAX_RELATED_POSTS);
     }
 
-    // If still no related posts, use a random selection as a final fallback
     if (relatedPosts.length === 0) {
         console.log("No AI or tag-based suggestions, falling back to random related posts.");
         relatedPosts = allPosts
-            .filter(otherPost => otherPost.id !== post!.id)
-            .sort(() => 0.5 - Math.random()) // Simple random shuffle
+            .filter(otherPost => String(otherPost.id) !== String(post!.id))
+            .sort(() => 0.5 - Math.random()) 
             .slice(0, MAX_RELATED_POSTS);
     }
 
@@ -130,28 +136,30 @@ export default async function PostPage({ params }: PostPageProps) {
         errorDisplay = aiError.message;
       } else {
         const stringifiedError = JSON.stringify(aiError);
-        errorDisplay = stringifiedError === '{}' ? "Received an empty object as error from AI flow, check Genkit logs and API key." : stringifiedError;
+        // Check if it's truly an empty object or just stringifies to one
+        errorDisplay = (stringifiedError === '{}' && Object.keys(aiError).length === 0) 
+                        ? "Received an empty object as error from AI flow, check Genkit logs and API key." 
+                        : stringifiedError;
       }
     } else if (typeof aiError === 'string') {
       errorDisplay = aiError;
     }
     console.error(`AI suggestion for related posts failed. Details: ${errorDisplay}. Full error object seen in PostPage:`, aiError);
 
-    // Fallback logic if AI suggestion promise rejects
     console.log("AI suggestion process failed, applying fallback for related posts.");
     if (post.tags && post.tags.length > 0) {
       console.log("Falling back to tag-based related posts due to AI error.");
       relatedPosts = allPosts.filter(otherPost => {
-        if (otherPost.id === post!.id) return false;
+        if (String(otherPost.id) === String(post!.id)) return false;
         return otherPost.tags.some(tag => post!.tags.includes(tag));
       }).slice(0, MAX_RELATED_POSTS);
     }
 
-    if (relatedPosts.length === 0) { // If tag-based didn't yield results or no tags
+    if (relatedPosts.length === 0) { 
       console.log("Falling back to random related posts due to AI error and no tag matches.");
       relatedPosts = allPosts
-        .filter(otherPost => otherPost.id !== post!.id)
-        .sort(() => 0.5 - Math.random()) // Simple random shuffle
+        .filter(otherPost => String(otherPost.id) !== String(post!.id))
+        .sort(() => 0.5 - Math.random()) 
         .slice(0, MAX_RELATED_POSTS);
     }
   }
@@ -235,7 +243,7 @@ export default async function PostPage({ params }: PostPageProps) {
           <h2 className="text-3xl font-headline font-bold text-primary mb-6 text-center">You may also like</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {relatedPosts.map((relatedPost) => (
-              <PostCard key={relatedPost.id} post={relatedPost} />
+              <PostCard key={String(relatedPost.id)} post={relatedPost} />
             ))}
           </div>
         </section>
