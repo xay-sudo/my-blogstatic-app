@@ -47,15 +47,15 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       <header className="bg-card border-b border-border">
         <BannerAd settings={siteSettings} />
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-          <Link href="/" className="flex items-center gap-3 text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
+          <Link href="/" className="flex items-center gap-4 text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             {siteSettings?.siteLogoUrl ? (
               <Image
                 src={siteSettings.siteLogoUrl}
                 alt={siteSettings.siteTitle || 'Site Logo'}
-                width={150} // Adjusted for potentially wider logos, or set fixed aspect ratio
-                height={40} 
-                className="h-10 w-auto object-contain" 
-                priority 
+                width={240} // Adjusted for potentially wider logos at a taller height
+                height={64}  // Corresponds to h-16
+                className="h-16 w-auto object-contain" // Increased height
+                priority
                 data-ai-hint="company logo"
               />
             ) : (
