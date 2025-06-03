@@ -4,12 +4,14 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import { CalendarDays, BookOpen } from 'lucide-react'; // Changed Eye to BookOpen
+import { CalendarDays, BookOpen } from 'lucide-react'; 
 import PostCard from '@/components/PostCard'; 
 import type { Post } from '@/types'; 
 import SocialShareButtons from '@/components/SocialShareButtons';
-import { headers } from 'next/headers'; // For constructing URL
+import { headers } from 'next/headers'; 
 import CommentSection from '@/components/CommentSection';
+import { suggestRelatedArticles } from '@/ai/flows/suggest-related-articles';
+import * as cheerio from 'cheerio';
 
 interface PostPageProps {
   params: {
@@ -37,6 +39,25 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   };
 }
 
+// Helper to get text excerpt from HTML
+function getExcerptFromHtml(htmlContent: string, maxLength: number = 300): string {
+  if (!htmlContent) return '';
+  try {
+    const $ = cheerio.load(htmlContent);
+    let text = $('body').text(); // Get text from the body, Cheerio wraps content in html/body
+    text = text.replace(/\s\s+/g, ' ').trim(); // Normalize whitespace
+    if (text.length > maxLength) {
+      return text.substring(0, maxLength) + '...';
+    }
+    return text;
+  } catch (error) {
+    console.warn("Cheerio couldn't parse HTML for excerpt, falling back to substring:", error);
+    const plainText = htmlContent.replace(/<[^>]*>?/gm, '');
+    return plainText.substring(0, maxLength) + (plainText.length > maxLength ? '...' : '');
+  }
+}
+
+
 export default async function PostPage({ params }: PostPageProps) {
   let post = await postService.getPostBySlug(params.slug);
 
@@ -58,18 +79,50 @@ export default async function PostPage({ params }: PostPageProps) {
 
   const allPosts = await postService.getAllPosts();
   let relatedPosts: Post[] = [];
+  const MAX_RELATED_POSTS = 8;
 
-  if (post.tags && post.tags.length > 0) {
-    relatedPosts = allPosts.filter(otherPost => {
-      if (otherPost.id === post.id) return false; 
-      return otherPost.tags.some(tag => post.tags.includes(tag));
-    }).slice(0, 8); // Changed from 4 to 8
-  } else {
-    relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 8); // Changed from 4 to 8
+  try {
+    const otherAvailablePosts = allPosts
+      .filter(p => p.id !== post!.id)
+      .map(p => ({ id: p.id, title: p.title }));
+
+    if (otherAvailablePosts.length > 0) {
+      const currentPostContentExcerpt = getExcerptFromHtml(post.content, 300);
+      const aiSuggestions = await suggestRelatedArticles({
+        currentPostId: post.id,
+        currentPostTitle: post.title,
+        currentPostContentExcerpt: currentPostContentExcerpt,
+        availablePosts: otherAvailablePosts,
+        count: MAX_RELATED_POSTS,
+      });
+
+      if (aiSuggestions.relatedPostIds.length > 0) {
+        // Map IDs to full post objects, maintaining order from AI if possible
+        const suggestedPostMap = new Map(allPosts.map(p => [p.id, p]));
+        relatedPosts = aiSuggestions.relatedPostIds
+          .map(id => suggestedPostMap.get(id))
+          .filter(p => p !== undefined) as Post[];
+      }
+    }
+  } catch (aiError) {
+    console.error("AI suggestion for related posts failed:", aiError);
+    // Fallback to simpler logic or empty if AI fails (optional)
+    // For now, if AI fails, relatedPosts will remain empty or use any prior logic.
+    // You could add the tag-based logic here as a fallback.
+    if (post.tags && post.tags.length > 0) {
+        relatedPosts = allPosts.filter(otherPost => {
+          if (otherPost.id === post!.id) return false; 
+          return otherPost.tags.some(tag => post!.tags.includes(tag));
+        }).slice(0, MAX_RELATED_POSTS);
+      } else {
+        relatedPosts = allPosts.filter(otherPost => otherPost.id !== post!.id).slice(0, MAX_RELATED_POSTS);
+      }
   }
+  
+  // If AI suggestions are fewer than max, and no fallback was triggered, we might have fewer than 8.
+  // This is fine.
 
-  // Construct the full post URL for sharing
-  const FALLBACK_SITE_URL = 'http://localhost:3000'; // Update if deployed and env var not set
+  const FALLBACK_SITE_URL = 'http://localhost:3000'; 
   let baseUrlToUse = process.env.NEXT_PUBLIC_SITE_URL;
 
   if (!baseUrlToUse) {
@@ -83,7 +136,7 @@ export default async function PostPage({ params }: PostPageProps) {
     }
   }
   const postUrl = `${baseUrlToUse}/posts/${post.slug}`;
-  const pageDescription = post.content.substring(0, 160).replace(/<[^>]*>?/gm, '').trim() + '...';
+  const pageDescription = getExcerptFromHtml(post.content, 160);
 
 
   return (
@@ -144,9 +197,9 @@ export default async function PostPage({ params }: PostPageProps) {
       </article>
 
       {relatedPosts.length > 0 && (
-        <section className="max-w-4xl mx-auto mt-12 py-8"> {/* Changed max-w-3xl to max-w-4xl for better fit */}
+        <section className="max-w-4xl mx-auto mt-12 py-8"> 
           <h2 className="text-3xl font-headline font-bold text-primary mb-6 text-center">You may also like</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Adjusted grid for 4 items */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> 
             {relatedPosts.map((relatedPost) => (
               <PostCard key={relatedPost.id} post={relatedPost} />
             ))}
@@ -158,4 +211,3 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
-
