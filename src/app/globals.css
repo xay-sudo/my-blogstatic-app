@@ -85,4 +85,17 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  /* Improve word wrapping for long strings to prevent layout overflow */
+  p, li, span, a, div, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+  }
+
+  /* Ensure images within prose are responsive and styled */
+  .prose img {
+    @apply max-w-full h-auto block mx-auto rounded-lg shadow-lg my-6; /* Added my-6 for vertical spacing */
+  }
+  /* Remove default margins from paragraphs inside prose that directly follow or precede an image */
+  .prose img + p, .prose p + img {
+    @apply mt-0 mb-0;
+  }
 }
