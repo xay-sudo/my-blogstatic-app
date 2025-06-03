@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { SiteSettings } from '@/types';
 import SearchBarClient from '@/components/SearchBarClient';
-import React, { useState, useEffect, useRef } from 'react'; 
+import React, { useState, useEffect, useRef } from 'react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
@@ -52,14 +52,15 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
               <Image
                 src={siteSettings.siteLogoUrl}
                 alt={siteSettings.siteTitle || 'Site Logo'}
-                width={40} // Adjust as needed, or make responsive
-                height={40} // Adjust as needed
-                className="h-10 w-auto object-contain" // Example: max height of 40px, width auto
-                priority // If logo is critical for LCP
+                width={150} // Adjusted for potentially wider logos, or set fixed aspect ratio
+                height={40} 
+                className="h-10 w-auto object-contain" 
+                priority 
                 data-ai-hint="company logo"
               />
-            ) : null}
-            <span>{siteSettings?.siteTitle || 'News Today'}</span>
+            ) : (
+              <span>{siteSettings?.siteTitle || 'News Today'}</span>
+            )}
           </Link>
         </div>
       </header>
