@@ -63,9 +63,9 @@ export default async function PostPage({ params }: PostPageProps) {
     relatedPosts = allPosts.filter(otherPost => {
       if (otherPost.id === post.id) return false; 
       return otherPost.tags.some(tag => post.tags.includes(tag));
-    }).slice(0, 4); 
+    }).slice(0, 8); // Changed from 4 to 8
   } else {
-    relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 4);
+    relatedPosts = allPosts.filter(otherPost => otherPost.id !== post.id).slice(0, 8); // Changed from 4 to 8
   }
 
   // Construct the full post URL for sharing
