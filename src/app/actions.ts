@@ -103,9 +103,21 @@ async function handleSupabaseFileUpload(file: File | undefined, bucketName: stri
     });
 
   if (error) {
-    console.error(`Error uploading to Supabase Storage (bucket: ${bucketName}):`, error);
-    throw new Error(`Could not upload file to cloud storage. Details: ${error.message || JSON.stringify(error)}.`);
+    console.error(`Supabase Storage Error (uploading to bucket: ${bucketName}):`, JSON.stringify(error, null, 2));
+    let detailedErrorMessage = (error as any).message || 'An unknown error occurred during file upload.';
+
+    if (
+        (typeof (error as any).status === 'number' && ((error as any).status === 400 || (error as any).status === 404)) ||
+        (detailedErrorMessage.toLowerCase().includes('bucket not found')) ||
+        (detailedErrorMessage.toLowerCase().includes('the resource was not found'))
+    ) {
+        detailedErrorMessage = `The storage bucket named "${bucketName}" was not found in your Supabase project, or it's not accessible. Please ensure this bucket exists and check its policies. You can create buckets in your Supabase Dashboard (Storage > Buckets). For public access to images, ensure the bucket has appropriate RLS and access policies.`;
+    } else {
+        detailedErrorMessage = `Could not upload file to cloud storage. Bucket: "${bucketName}". Details: ${detailedErrorMessage}`;
+    }
+    throw new Error(detailedErrorMessage);
   }
+
 
   const supabasePublic = getSupabasePublicClient(); // Use public client for public URL
   const { data: publicUrlData } = supabasePublic.storage.from(bucketName).getPublicUrl(data.path);
@@ -547,3 +559,4 @@ export async function logoutAction() {
   revalidatePath('/login');
   redirect('/login');
 }
+
