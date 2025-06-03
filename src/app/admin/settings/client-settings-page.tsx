@@ -42,6 +42,12 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   globalHeaderScriptsCustomHtml: '',
   globalFooterScriptsEnabled: false,
   globalFooterScriptsCustomHtml: '',
+  bannerEnabled: false,
+  bannerType: 'customHtml',
+  bannerImageUrl: '',
+  bannerImageLink: '',
+  bannerImageAltText: '',
+  bannerCustomHtml: '',
 };
 
 const MAX_LOGO_SIZE_MB = 1;
@@ -198,20 +204,23 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const watchedGlobalHeaderScriptsEnabled = form.watch('globalHeaderScriptsEnabled');
   const watchedGlobalFooterScriptsEnabled = form.watch('globalFooterScriptsEnabled');
 
-  const generalSettingFields: (keyof SiteSettingsFormValues)[] = [
-    'siteTitle', 'siteDescription', 'postsPerPage', 
+  // Define field groups for dirty checking
+  const baseGeneralSettingFields: (keyof SiteSettingsFormValues)[] = [
+    'siteTitle', 'siteDescription', 'postsPerPage',
+  ];
+  const scriptSettingFields: (keyof SiteSettingsFormValues)[] = [
     'globalHeaderScriptsEnabled', 'globalHeaderScriptsCustomHtml',
     'globalFooterScriptsEnabled', 'globalFooterScriptsCustomHtml',
   ];
-  const isAdminSettingsDirty = form.formState.dirtyFields.adminUsername || (watchedAdminPassword && watchedAdminPassword.length > 0);
-  
-  // Check if general settings or logo settings have changed
+  const adminSettingFields: (keyof SiteSettingsFormValues)[] = [
+    'adminUsername', 'adminPassword',
+  ];
+
   const isLogoDirty = selectedLogoFile !== null || (userWantsToRemoveLogo && propsInitialSettings?.siteLogoUrl);
-  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]) || isLogoDirty;
-
-
-  const isGeneralSaveDisabled = isSubmitting || !isGeneralSettingsDirty;
-  const isAdminSaveDisabled = isSubmitting || !isAdminSettingsDirty;
+  
+  const isBaseGeneralSettingsDirty = baseGeneralSettingFields.some(field => form.formState.dirtyFields[field]) || isLogoDirty;
+  const isScriptSettingsDirty = scriptSettingFields.some(field => form.formState.dirtyFields[field]);
+  const isAdminCredentialsDirty = adminSettingFields.some(field => form.formState.dirtyFields[field.valueOf() as keyof typeof form.formState.dirtyFields]);
 
 
   const onSubmit = async (data: SiteSettingsFormValues) => {
@@ -251,28 +260,24 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
           title: 'Settings Updated',
           description: 'Site settings have been saved successfully.',
         });
-        // After successful update, router.refresh() will cause page to reload
-        // and `useEffect` will reset form with new `propsInitialSettings`.
-        // We also manually update the `initialSettings` used by refinement and dirty checks.
         
         const newPersistedSettings = {
           ...propsInitialSettings,
           ...data,
-          siteLogoUrl: result.newSiteLogoUrl !== undefined ? result.newSiteLogoUrl : propsInitialSettings.siteLogoUrl, // Use the URL from action result
+          siteLogoUrl: result.newSiteLogoUrl !== undefined ? result.newSiteLogoUrl : propsInitialSettings.siteLogoUrl,
           adminPassword: (data.adminPassword && data.adminPassword.length > 0) 
                           ? data.adminPassword 
                           : (data.adminUsername === propsInitialSettings.adminUsername && propsInitialSettings.adminPassword)
                             ? propsInitialSettings.adminPassword 
                             : ''
         };
-        initialSettings = newPersistedSettings; // Update the module-level initialSettings
+        initialSettings = newPersistedSettings; 
 
-        form.reset({ // Reset form with potentially new data structure
+        form.reset({ 
           ...newPersistedSettings,
-          adminPassword: '', // Always clear password field
+          adminPassword: '', 
         });
         
-        // Update local state for logo based on action result
         setLogoPreviewUrl(result.newSiteLogoUrl || null);
         setSelectedLogoFile(null);
         setUserWantsToRemoveLogo(false);
@@ -438,7 +443,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                 </div>
 
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled || isAdminSettingsDirty}>
+                  <Button type="submit" variant="primary" disabled={isSubmitting || !isBaseGeneralSettingsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
@@ -551,7 +556,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
 
 
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled || isAdminSettingsDirty}>
+                  <Button type="submit" variant="primary" disabled={isSubmitting || !isScriptSettingsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
@@ -620,7 +625,7 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                   )}
                 </div>
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" variant="primary" disabled={isAdminSaveDisabled || isGeneralSettingsDirty}>
+                  <Button type="submit" variant="primary" disabled={isSubmitting || !isAdminCredentialsDirty}>
                     {isSubmitting ? (
                       <><Loader2Icon className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                     ) : (
@@ -636,3 +641,4 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     </Card>
   );
 }
+
