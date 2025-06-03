@@ -4,8 +4,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 as Loader2Icon, Save, ShieldAlert, ShieldCheck, TerminalSquare, Heading1 } from 'lucide-react';
+import { Loader2 as Loader2Icon, Save, ShieldAlert, ShieldCheck, TerminalSquare, Heading1, ImagePlus, Trash2 } from 'lucide-react';
 import { updateSiteSettingsAction } from '@/app/actions'; 
 import type { SiteSettings } from '@/types';
 import { Switch } from '@/components/ui/switch';
@@ -34,6 +35,7 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   siteTitle: "Newstoday",
   siteDescription: "A modern blog platform with AI-powered tagging.",
   postsPerPage: 6,
+  siteLogoUrl: "",
   adminUsername: '',
   adminPassword: '',
   globalHeaderScriptsEnabled: false,
@@ -41,6 +43,9 @@ const CLIENT_DEFAULT_SETTINGS: SiteSettings = {
   globalFooterScriptsEnabled: false,
   globalFooterScriptsCustomHtml: '',
 };
+
+const MAX_LOGO_SIZE_MB = 1;
+const MAX_LOGO_SIZE_BYTES = MAX_LOGO_SIZE_MB * 1024 * 1024;
 
 
 const siteSettingsFormSchema = z.object({
@@ -57,6 +62,7 @@ const siteSettingsFormSchema = z.object({
   globalHeaderScriptsCustomHtml: z.string().optional(),
   globalFooterScriptsEnabled: z.boolean().default(false),
   globalFooterScriptsCustomHtml: z.string().optional(),
+  // siteLogoUrl is handled by file input and specific logic, not direct form field for Zod here
 }).superRefine((data, ctx) => {
   if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
@@ -121,6 +127,10 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(propsInitialSettings?.siteLogoUrl || null);
+  const [userWantsToRemoveLogo, setUserWantsToRemoveLogo] = useState<boolean>(false);
+
   const form = useForm<SiteSettingsFormValues>({
     resolver: zodResolver(siteSettingsFormSchema),
     defaultValues: {
@@ -150,7 +160,38 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
       globalFooterScriptsEnabled: propsInitialSettings?.globalFooterScriptsEnabled || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsEnabled,
       globalFooterScriptsCustomHtml: propsInitialSettings?.globalFooterScriptsCustomHtml || CLIENT_DEFAULT_SETTINGS.globalFooterScriptsCustomHtml,
     });
+    setLogoPreviewUrl(propsInitialSettings?.siteLogoUrl || null);
+    setSelectedLogoFile(null);
+    setUserWantsToRemoveLogo(false);
   }, [propsInitialSettings, form]);
+
+  const handleLogoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_LOGO_SIZE_BYTES) {
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: `Logo image must be less than ${MAX_LOGO_SIZE_MB}MB. Yours is ${(file.size / (1024*1024)).toFixed(2)}MB.`,
+        });
+        event.target.value = ''; // Clear the input
+        return;
+      }
+      setSelectedLogoFile(file);
+      setLogoPreviewUrl(URL.createObjectURL(file));
+      setUserWantsToRemoveLogo(false); // If user selects a new file, they no longer intend to just remove
+      form.trigger(); // Trigger validation if needed, and update dirty state
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setSelectedLogoFile(null);
+    setLogoPreviewUrl(null);
+    setUserWantsToRemoveLogo(true);
+    const logoInput = document.getElementById('logo-upload') as HTMLInputElement;
+    if (logoInput) logoInput.value = ''; // Clear the file input
+    form.trigger();
+  };
 
   const watchedAdminUsername = form.watch('adminUsername');
   const watchedAdminPassword = form.watch('adminPassword');
@@ -163,7 +204,10 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     'globalFooterScriptsEnabled', 'globalFooterScriptsCustomHtml',
   ];
   const isAdminSettingsDirty = form.formState.dirtyFields.adminUsername || (watchedAdminPassword && watchedAdminPassword.length > 0);
-  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]);
+  
+  // Check if general settings or logo settings have changed
+  const isLogoDirty = selectedLogoFile !== null || (userWantsToRemoveLogo && propsInitialSettings?.siteLogoUrl);
+  const isGeneralSettingsDirty = generalSettingFields.some(field => form.formState.dirtyFields[field]) || isLogoDirty;
 
 
   const isGeneralSaveDisabled = isSubmitting || !isGeneralSettingsDirty;
@@ -183,6 +227,13 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
     formData.append('globalFooterScriptsEnabled', data.globalFooterScriptsEnabled ? 'on' : 'off');
     formData.append('globalFooterScriptsCustomHtml', data.globalFooterScriptsCustomHtml || '');
 
+    if (selectedLogoFile) {
+      formData.append('logoFile', selectedLogoFile);
+    }
+    if (userWantsToRemoveLogo && !selectedLogoFile) {
+      formData.append('removeLogo', 'true');
+    }
+
 
     if (data.adminPassword && data.adminPassword.length > 0) {
       formData.append('adminPassword', data.adminPassword);
@@ -200,24 +251,36 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
           title: 'Settings Updated',
           description: 'Site settings have been saved successfully.',
         });
-        router.refresh(); 
+        // After successful update, router.refresh() will cause page to reload
+        // and `useEffect` will reset form with new `propsInitialSettings`.
+        // We also manually update the `initialSettings` used by refinement and dirty checks.
         
-        const newInitialSettings = { ...propsInitialSettings, ...data };
-        if (!data.adminPassword || data.adminPassword.length === 0) {
-          if (propsInitialSettings.adminUsername === data.adminUsername && propsInitialSettings.adminPassword) {
-             newInitialSettings.adminPassword = propsInitialSettings.adminPassword;
-          }
-        }
-        initialSettings = {
-           ...propsInitialSettings, 
-           ...data, 
-           adminPassword: (data.adminPassword && data.adminPassword.length > 0) 
+        const newPersistedSettings = {
+          ...propsInitialSettings,
+          ...data,
+          siteLogoUrl: result.newSiteLogoUrl !== undefined ? result.newSiteLogoUrl : propsInitialSettings.siteLogoUrl, // Use the URL from action result
+          adminPassword: (data.adminPassword && data.adminPassword.length > 0) 
                           ? data.adminPassword 
                           : (data.adminUsername === propsInitialSettings.adminUsername && propsInitialSettings.adminPassword)
                             ? propsInitialSettings.adminPassword 
-                            : '' 
+                            : ''
         };
-        form.reset({ ...data, adminPassword: '' }); 
+        initialSettings = newPersistedSettings; // Update the module-level initialSettings
+
+        form.reset({ // Reset form with potentially new data structure
+          ...newPersistedSettings,
+          adminPassword: '', // Always clear password field
+        });
+        
+        // Update local state for logo based on action result
+        setLogoPreviewUrl(result.newSiteLogoUrl || null);
+        setSelectedLogoFile(null);
+        setUserWantsToRemoveLogo(false);
+        const logoInput = document.getElementById('logo-upload') as HTMLInputElement;
+        if (logoInput) logoInput.value = '';
+
+        router.refresh(); 
+
       } else {
         let toastDescription = result?.message || 'An unknown error occurred.';
         
@@ -316,6 +379,64 @@ export default function ClientSettingsPage({ initialSettings: propsInitialSettin
                     </FormItem>
                   )}
                 />
+
+                {/* Site Logo Section */}
+                <div className="space-y-2">
+                  <FormLabel>Site Logo</FormLabel>
+                  <div className="p-4 border rounded-md bg-muted/30 space-y-4">
+                    <FormItem>
+                      <FormControl>
+                        <Input
+                          id="logo-upload"
+                          type="file"
+                          accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                          onChange={handleLogoFileChange}
+                          disabled={isSubmitting}
+                          className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Upload a logo (PNG, JPG, WEBP, SVG). Max {MAX_LOGO_SIZE_MB}MB. Recommended: square or wide aspect ratio.
+                      </FormDescription>
+                    </FormItem>
+
+                    {logoPreviewUrl && (
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-muted-foreground">Logo Preview:</p>
+                        <div className="relative w-32 h-32 border rounded-md p-2 bg-background inline-block">
+                          <Image
+                            src={logoPreviewUrl}
+                            alt="Site logo preview"
+                            fill
+                            sizes="128px"
+                            style={{ objectFit: 'contain' }}
+                            className="rounded"
+                            data-ai-hint="site logo preview"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleRemoveLogo}
+                          disabled={isSubmitting}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remove Logo
+                        </Button>
+                      </div>
+                    )}
+                     {!logoPreviewUrl && !selectedLogoFile && (
+                       <div className="flex items-center justify-center h-32 border border-dashed rounded-md bg-background/50">
+                          <div className="text-center text-muted-foreground">
+                            <ImagePlus className="w-8 h-8 mx-auto mb-1" />
+                            <p className="text-xs">No logo uploaded</p>
+                          </div>
+                       </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end pt-4">
                   <Button type="submit" variant="primary" disabled={isGeneralSaveDisabled || isAdminSettingsDirty}>
                     {isSubmitting ? (

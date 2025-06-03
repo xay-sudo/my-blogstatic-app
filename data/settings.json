@@ -3,6 +3,7 @@
   "siteTitle": "Newstoday",
   "siteDescription": "A modern blog platform with AI-powered tagging and content scraping.",
   "postsPerPage": 18,
+  "siteLogoUrl": "",
   "adminUsername": "vanchhaydok@gmail.com",
   "adminPassword": "Dell123",
   "globalHeaderScriptsEnabled": false,

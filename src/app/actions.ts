@@ -10,9 +10,10 @@ import * as z from 'zod';
 import { cookies } from 'next/headers';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const SUPABASE_BUCKET_NAME = 'post-thumbnails';
+const MAX_THUMBNAIL_OR_LOGO_SIZE = 5 * 1024 * 1024; // 5MB for thumbnails and logos
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+const POST_THUMBNAIL_BUCKET_NAME = 'post-thumbnails';
+const SITE_ASSETS_BUCKET_NAME = 'site-assets'; // For site logo, etc.
 
 // Helper function to validate HTTP/HTTPS URL format
 function isValidHttpUrl(string: string | undefined): boolean {
@@ -75,50 +76,51 @@ const postTextFormSchema = z.object({
 
 export type PostServiceValues = Omit<Post, 'id' | 'date'>;
 
-async function handleSupabaseFileUpload(file: File | undefined): Promise<string | undefined> {
+async function handleSupabaseFileUpload(file: File | undefined, bucketName: string): Promise<string | undefined> {
   if (!file) return undefined;
 
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit.`);
+  if (file.size > MAX_THUMBNAIL_OR_LOGO_SIZE) {
+    throw new Error(`File size exceeds ${MAX_THUMBNAIL_OR_LOGO_SIZE / (1024 * 1024)}MB limit.`);
   }
-  if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-    throw new Error(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`);
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    throw new Error(`Invalid file type. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`);
   }
 
   const supabaseAdmin = getSupabaseAdminClient();
 
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-  const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '.png';
+  const extension = file.name.includes('.') ? `.${file.name.split('.').pop()}` : (file.type.split('/')[1] || 'png');
   const sanitizedBaseName = (file.name.replace(/\.[^/.]+$/, "") || 'untitled').replace(/[^a-zA-Z0-9_.-]/g, '_');
   const filename = `${sanitizedBaseName}-${uniqueSuffix}${extension}`;
 
-  const filePathInBucket = `public/${filename}`;
+  const filePathInBucket = `public/${filename}`; // Always store in 'public' for easier URL generation
 
   const { data, error } = await supabaseAdmin.storage
-    .from(SUPABASE_BUCKET_NAME)
+    .from(bucketName)
     .upload(filePathInBucket, file, {
-      cacheControl: '3600',
-      upsert: false,
+      cacheControl: '3600', // Cache for 1 hour
+      upsert: false, // Don't upsert, always create new unique filename
     });
 
   if (error) {
-    console.error("Error uploading to Supabase Storage (admin client):", error);
+    console.error(`Error uploading to Supabase Storage (bucket: ${bucketName}):`, error);
     throw new Error(`Could not upload file to cloud storage. Details: ${error.message || JSON.stringify(error)}.`);
   }
 
-  const supabasePublic = getSupabasePublicClient();
-  const { data: publicUrlData } = supabasePublic.storage.from(SUPABASE_BUCKET_NAME).getPublicUrl(data.path);
+  const supabasePublic = getSupabasePublicClient(); // Use public client for public URL
+  const { data: publicUrlData } = supabasePublic.storage.from(bucketName).getPublicUrl(data.path);
 
   if (!publicUrlData || !publicUrlData.publicUrl) {
-      console.error("Could not get public URL for Supabase file:", data.path);
-      await supabaseAdmin.storage.from(SUPABASE_BUCKET_NAME).remove([data.path]); // Clean up orphaned file
+      console.error(`Could not get public URL for Supabase file in bucket ${bucketName}:`, data.path);
+      // Attempt to clean up the orphaned file
+      await supabaseAdmin.storage.from(bucketName).remove([data.path]);
       throw new Error("File uploaded, but could not retrieve its public URL.");
   }
 
   return publicUrlData.publicUrl;
 }
 
-async function deleteSupabaseFile(fileUrl: string | undefined) {
+async function deleteSupabaseFile(fileUrl: string | undefined, bucketName?: string) {
   if (!fileUrl || !isValidHttpUrl(fileUrl)) {
     console.warn('Invalid or no file URL provided for deletion from Supabase:', fileUrl);
     return;
@@ -129,10 +131,27 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
   try {
     const url = new URL(fileUrl);
     const pathParts = url.pathname.split('/');
+    
+    // Determine bucket name from URL structure if not provided
+    // Typical Supabase storage URL: /storage/v1/object/public/BUCKET_NAME/public/filename.ext
+    let determinedBucketName = bucketName;
+    if (!determinedBucketName) {
+      const objectPathIndex = pathParts.indexOf('object');
+      if (objectPathIndex !== -1 && pathParts.length > objectPathIndex + 2) {
+        determinedBucketName = pathParts[objectPathIndex + 2]; // BUCKET_NAME is after /object/public/
+      }
+    }
+    
+    if (!determinedBucketName) {
+        console.error('Could not determine bucket name from Supabase URL for deletion:', fileUrl);
+        return;
+    }
+
     let filePathInBucket = '';
-    const bucketNameIndex = pathParts.indexOf(SUPABASE_BUCKET_NAME);
-    if (bucketNameIndex !== -1 && bucketNameIndex < pathParts.length -1) {
-        filePathInBucket = pathParts.slice(bucketNameIndex + 1).join('/');
+    const bucketNameIndexInPath = pathParts.indexOf(determinedBucketName);
+    if (bucketNameIndexInPath !== -1 && bucketNameIndexInPath < pathParts.length -1) {
+        // The path should be relative to the bucket, e.g., "public/filename.ext"
+        filePathInBucket = pathParts.slice(bucketNameIndexInPath + 1).join('/');
     }
 
     if (!filePathInBucket) {
@@ -141,13 +160,13 @@ async function deleteSupabaseFile(fileUrl: string | undefined) {
     }
 
     const { error } = await supabaseAdmin.storage
-      .from(SUPABASE_BUCKET_NAME)
+      .from(determinedBucketName)
       .remove([filePathInBucket]);
 
     if (error) {
-      console.warn('Failed to delete file from Supabase Storage (admin client):', filePathInBucket, error.message);
+      console.warn(`Failed to delete file from Supabase Storage (bucket: ${determinedBucketName}):`, filePathInBucket, error.message);
     } else {
-      console.log('Successfully deleted file from Supabase Storage (admin client):', filePathInBucket);
+      console.log(`Successfully deleted file from Supabase Storage (bucket: ${determinedBucketName}):`, filePathInBucket);
     }
   } catch (error: any) {
     console.error('Error processing Supabase file URL for deletion:', fileUrl, error.message);
@@ -178,7 +197,7 @@ export async function createPostAction(formData: FormData) {
 
   try {
     if (thumbnailFile && thumbnailFile.size > 0) {
-      thumbnailUrl = await handleSupabaseFileUpload(thumbnailFile);
+      thumbnailUrl = await handleSupabaseFileUpload(thumbnailFile, POST_THUMBNAIL_BUCKET_NAME);
     }
 
     const postData: PostServiceValues = {
@@ -189,11 +208,11 @@ export async function createPostAction(formData: FormData) {
     await postService.addPost(postData);
 
   } catch (error: any) {
-    console.error('Failed to create post (in action):', error); // Log the original error
+    console.error('Failed to create post (in action):', error); 
     let detailedErrorMessage = 'Could not create post.';
 
     if (error instanceof Error && error.message) {
-        detailedErrorMessage = error.message; // Use the message from the service layer directly
+        detailedErrorMessage = error.message; 
     } else if (typeof error === 'string') {
         detailedErrorMessage = error;
     } else {
@@ -202,7 +221,7 @@ export async function createPostAction(formData: FormData) {
 
     if (thumbnailUrl) {
         console.log('Attempting to delete uploaded thumbnail due to post creation error...');
-        await deleteSupabaseFile(thumbnailUrl);
+        await deleteSupabaseFile(thumbnailUrl, POST_THUMBNAIL_BUCKET_NAME);
     }
     return {
       success: false,
@@ -249,9 +268,9 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     if (newThumbnailFile && newThumbnailFile.size > 0) {
       if (currentThumbnailUrl) {
-        await deleteSupabaseFile(currentThumbnailUrl);
+        await deleteSupabaseFile(currentThumbnailUrl, POST_THUMBNAIL_BUCKET_NAME);
       }
-      newUrlUploaded = await handleSupabaseFileUpload(newThumbnailFile);
+      newUrlUploaded = await handleSupabaseFileUpload(newThumbnailFile, POST_THUMBNAIL_BUCKET_NAME);
       finalThumbnailUrl = newUrlUploaded;
     } else {
       finalThumbnailUrl = currentThumbnailUrl;
@@ -265,7 +284,7 @@ export async function updatePostAction(postId: string, formData: FormData) {
 
     const updatedPost = await postService.updatePost(postId, postData);
     if (!updatedPost) {
-      if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
+      if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded, POST_THUMBNAIL_BUCKET_NAME);
       return {
         success: false,
         message: 'Post not found or could not be updated.',
@@ -273,17 +292,17 @@ export async function updatePostAction(postId: string, formData: FormData) {
       };
     }
   } catch (error: any) {
-    console.error('Failed to update post:', error); // Log the original error
+    console.error('Failed to update post:', error); 
     let detailedErrorMessage = 'Could not update post.';
      if (error instanceof Error && error.message) {
-        detailedErrorMessage = error.message; // Use the message from the service layer directly
+        detailedErrorMessage = error.message; 
     } else if (typeof error === 'string') {
         detailedErrorMessage = error;
     } else {
         detailedErrorMessage = 'An unexpected error occurred. Check server logs for details.';
     }
 
-    if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded);
+    if (newUrlUploaded) await deleteSupabaseFile(newUrlUploaded, POST_THUMBNAIL_BUCKET_NAME);
     return {
       success: false,
       message: detailedErrorMessage,
@@ -303,7 +322,7 @@ export async function deletePostAction(postId: string) {
   try {
     const postToDelete = await postService.getPostById(postId);
     if (postToDelete?.thumbnailUrl) {
-      await deleteSupabaseFile(postToDelete.thumbnailUrl);
+      await deleteSupabaseFile(postToDelete.thumbnailUrl, POST_THUMBNAIL_BUCKET_NAME);
     }
     await postService.deletePostById(postId);
     revalidatePath('/');
@@ -329,6 +348,7 @@ const siteSettingsSchema = z.object({
   globalHeaderScriptsCustomHtml: z.string().optional(),
   globalFooterScriptsEnabled: z.preprocess((val) => val === 'on' || val === true, z.boolean().default(false)),
   globalFooterScriptsCustomHtml: z.string().optional(),
+  // siteLogoUrl is handled by file logic, not direct Zod validation of a URL field from form
 }).superRefine((data, ctx) => {
   if (data.globalHeaderScriptsEnabled && (!data.globalHeaderScriptsCustomHtml || data.globalHeaderScriptsCustomHtml.trim() === '')) {
     ctx.addIssue({
@@ -368,6 +388,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
       success: false,
       message: "Validation failed. Check server logs for details.",
       errors: validation.error.flatten().fieldErrors,
+      newSiteLogoUrl: undefined, // Ensure this is returned
     };
   }
 
@@ -406,14 +427,37 @@ export async function updateSiteSettingsAction(formData: FormData) {
       success: false,
       message: "Admin credentials validation failed.",
       errors: credentialErrors,
+      newSiteLogoUrl: undefined,
     };
   }
 
+  let finalSiteLogoUrl = currentSettings.siteLogoUrl;
+  const newLogoFile = formData.get('logoFile') as File | undefined;
+  const removeLogo = formData.get('removeLogo') === 'true';
+  let newUrlUploaded: string | undefined = undefined;
+
+
   try {
+    if (removeLogo) {
+      if (currentSettings.siteLogoUrl) {
+        await deleteSupabaseFile(currentSettings.siteLogoUrl, SITE_ASSETS_BUCKET_NAME);
+      }
+      finalSiteLogoUrl = undefined;
+    } else if (newLogoFile && newLogoFile.size > 0) {
+      if (currentSettings.siteLogoUrl) {
+        await deleteSupabaseFile(currentSettings.siteLogoUrl, SITE_ASSETS_BUCKET_NAME);
+      }
+      newUrlUploaded = await handleSupabaseFileUpload(newLogoFile, SITE_ASSETS_BUCKET_NAME);
+      finalSiteLogoUrl = newUrlUploaded;
+    }
+    // If neither removeLogo nor newLogoFile, finalSiteLogoUrl remains currentSettings.siteLogoUrl
+
+
     const settingsToUpdate: Partial<SiteSettings> = {
       siteTitle: validation.data.siteTitle,
       siteDescription: validation.data.siteDescription,
       postsPerPage: validation.data.postsPerPage,
+      siteLogoUrl: finalSiteLogoUrl, // Use the determined logo URL
       adminUsername: formUsername,
       globalHeaderScriptsEnabled: validation.data.globalHeaderScriptsEnabled,
       globalHeaderScriptsCustomHtml: validation.data.globalHeaderScriptsCustomHtml,
@@ -426,27 +470,34 @@ export async function updateSiteSettingsAction(formData: FormData) {
     } else if (!formUsername) {
       settingsToUpdate.adminPassword = ""; 
     } else if (formUsername && formUsername === currentSettings.adminUsername && currentSettings.adminPassword) {
-      // No password update
+      // No password update, keep existing hashed if it was hashed
     } else if (formUsername && (!currentSettings.adminPassword || formUsername !== currentSettings.adminUsername) && formPassword.length === 0) {
-       settingsToUpdate.adminPassword = "";
+       settingsToUpdate.adminPassword = ""; // Clearing password if username changed and no new pass
     }
 
     await settingsService.updateSettings(settingsToUpdate);
-    revalidatePath('/');
+    revalidatePath('/'); // Revalidate homepage (for site title/logo)
     revalidatePath('/admin/settings');
-    revalidatePath('/login');
+    revalidatePath('/login'); // If admin creds changed
 
     return {
       success: true,
       message: 'Site settings updated successfully.',
       errors: null,
+      newSiteLogoUrl: finalSiteLogoUrl, // Return the new logo URL
     };
   } catch (error: any) {
     console.error('Failed to update site settings:', error);
+    // If a new logo was uploaded but then an error occurred, attempt to delete it
+    if (newUrlUploaded) {
+        console.log('Attempting to delete uploaded logo due to settings update error...');
+        await deleteSupabaseFile(newUrlUploaded, SITE_ASSETS_BUCKET_NAME);
+    }
     return {
       success: false,
       message: error.message || 'Could not update site settings. Check server logs.',
       errors: null,
+      newSiteLogoUrl: currentSettings.siteLogoUrl, // Revert to original if error
     };
   }
 }
@@ -471,7 +522,7 @@ export async function loginAction(
   }
 
   const isValidUsername = username === settings.adminUsername;
-  const isValidPassword = password === settings.adminPassword;
+  const isValidPassword = password === settings.adminPassword; // Plaintext comparison
 
   if (isValidUsername && isValidPassword) {
     cookies().set(SESSION_COOKIE_NAME, 'true', {

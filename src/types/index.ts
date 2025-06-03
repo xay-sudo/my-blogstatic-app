@@ -14,6 +14,7 @@ export interface SiteSettings {
   siteTitle: string;
   siteDescription: string;
   postsPerPage: number;
+  siteLogoUrl?: string; // Added for site logo
   // Local Admin Auth
   adminUsername?: string;
   adminPassword?: string; // WARNING: Stored in plaintext for local demo only. NOT SECURE.

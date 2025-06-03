@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
 import BannerAd from '@/components/BannerAd';
+import Image from 'next/image'; // Import next/image
 
 interface HeaderProps {
   siteSettings: SiteSettings | null;
@@ -46,8 +47,19 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
       <header className="bg-card border-b border-border">
         <BannerAd settings={siteSettings} />
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-          <Link href="/" className="text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
-            {siteSettings?.siteTitle || 'News Today'}
+          <Link href="/" className="flex items-center gap-3 text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
+            {siteSettings?.siteLogoUrl ? (
+              <Image
+                src={siteSettings.siteLogoUrl}
+                alt={siteSettings.siteTitle || 'Site Logo'}
+                width={40} // Adjust as needed, or make responsive
+                height={40} // Adjust as needed
+                className="h-10 w-auto object-contain" // Example: max height of 40px, width auto
+                priority // If logo is critical for LCP
+                data-ai-hint="company logo"
+              />
+            ) : null}
+            <span>{siteSettings?.siteTitle || 'News Today'}</span>
           </Link>
         </div>
       </header>
@@ -87,4 +99,3 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
     </>
   );
 }
-

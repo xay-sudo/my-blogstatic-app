@@ -13,12 +13,19 @@ const DEFAULT_SETTINGS_OBJ: SiteSettings = {
   siteTitle: "Newstoday",
   siteDescription: "A modern blog platform with AI-powered tagging.",
   postsPerPage: 6,
+  siteLogoUrl: "", // Added default for site logo
   adminUsername: '',
   adminPassword: '',
   globalHeaderScriptsEnabled: false,
   globalHeaderScriptsCustomHtml: '',
   globalFooterScriptsEnabled: false,
   globalFooterScriptsCustomHtml: '',
+  bannerEnabled: false,
+  bannerType: 'customHtml',
+  bannerImageUrl: '',
+  bannerImageLink: '',
+  bannerImageAltText: '',
+  bannerCustomHtml: '',
 };
 
 // Helper function to validate HTTP/HTTPS URL format for internal use
@@ -213,6 +220,10 @@ export async function updateSettings(newSettings: Partial<SiteSettings>): Promis
   if (newSettings.hasOwnProperty('adminPassword')) {
       mergedSettings.adminPassword = String(newSettings.adminPassword ?? '');
   }
+   if (newSettings.hasOwnProperty('siteLogoUrl')) {
+    mergedSettings.siteLogoUrl = newSettings.siteLogoUrl; // Allow null or empty string
+  }
+
 
   if (typeof mergedSettings.globalHeaderScriptsEnabled === 'string') {
     mergedSettings.globalHeaderScriptsEnabled = mergedSettings.globalHeaderScriptsEnabled === 'on' || mergedSettings.globalHeaderScriptsEnabled === 'true';

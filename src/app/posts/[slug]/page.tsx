@@ -65,10 +65,14 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  const newViewCount = await postService.incrementViewCount(String(post.id)); // Ensure ID is string for view count
+  // Ensure post.id is a string before calling incrementViewCount
+  const postIdAsString = String(post.id);
+  const newViewCount = await postService.incrementViewCount(postIdAsString);
 
   if (newViewCount !== null) {
-    post = { ...post, viewCount: newViewCount };
+    post = { ...post, viewCount: newViewCount, id: postIdAsString }; // Ensure id remains string
+  } else {
+    post = { ...post, id: postIdAsString }; // Ensure id is string even if view count fails
   }
 
   const formattedDate = new Date(post.date).toLocaleDateString('en-US', {
@@ -136,9 +140,8 @@ export default async function PostPage({ params }: PostPageProps) {
         errorDisplay = aiError.message;
       } else {
         const stringifiedError = JSON.stringify(aiError);
-        // Check if it's truly an empty object or just stringifies to one
         errorDisplay = (stringifiedError === '{}' && Object.keys(aiError).length === 0) 
-                        ? "Received an empty object as error from AI flow, check Genkit logs and API key." 
+                        ? "Received an empty object as error from AI flow. Check Genkit logs, API key, and ensure IDs are strings." 
                         : stringifiedError;
       }
     } else if (typeof aiError === 'string') {
@@ -253,4 +256,3 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
-
