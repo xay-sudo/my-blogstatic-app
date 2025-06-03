@@ -72,6 +72,10 @@ const suggestRelatedArticlesFlow = ai.defineFlow(
   },
   async (input): Promise<SuggestRelatedArticlesOutput> => {
     try {
+      if (!input.availablePosts || input.availablePosts.length === 0) {
+        console.log(`[${new Date().toISOString()}] No available posts to suggest from for 'suggestRelatedArticlesPrompt'. Returning empty suggestions.`);
+        return { relatedPostIds: [] };
+      }
       const {output} = await prompt(input);
       if (output) {
         // Ensure the current post ID is not in the suggestions, just in case AI includes it.
@@ -79,15 +83,28 @@ const suggestRelatedArticlesFlow = ai.defineFlow(
         return { relatedPostIds: filteredOutput.slice(0, input.count) };
       } else {
         console.warn(
-          `[${new Date().toISOString()}] AI prompt 'suggestRelatedArticlesPrompt' did not return structured output. Falling back to empty suggestions.`
+          `[${new Date().toISOString()}] AI prompt 'suggestRelatedArticlesPrompt' did not return structured output. Falling back to empty suggestions. Input excerpt: "${input.currentPostContentExcerpt.substring(0,100)}..."`
         );
         return { relatedPostIds: [] };
       }
     } catch (error: any) {
+      let errorMessage = 'Unknown error during AI suggestion.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else {
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch (e) {
+          errorMessage = 'Error object could not be stringified.';
+        }
+      }
       console.error(
-        `[${new Date().toISOString()}] Error calling 'suggestRelatedArticlesPrompt' AI model. Error: ${error.message || JSON.stringify(error)}. Falling back to empty suggestions.`
+        `[${new Date().toISOString()}] Error in 'suggestRelatedArticlesPrompt' AI model. Error: ${errorMessage}. Input title: "${input.currentPostTitle}", Excerpt: "${input.currentPostContentExcerpt.substring(0,100)}...". Full error object:`, error
       );
-      return { relatedPostIds: [] };
+      return { relatedPostIds: [] }; // Fallback to empty suggestions
     }
   }
 );
+

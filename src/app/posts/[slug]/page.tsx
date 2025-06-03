@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import TagBadge from '@/components/TagBadge';
-import { CalendarDays, BookOpen } from 'lucide-react'; 
-import PostCard from '@/components/PostCard'; 
-import type { Post } from '@/types'; 
+import { CalendarDays, BookOpen } from 'lucide-react';
+import PostCard from '@/components/PostCard';
+import type { Post } from '@/types';
 import SocialShareButtons from '@/components/SocialShareButtons';
-import { headers } from 'next/headers'; 
+import { headers } from 'next/headers';
 import CommentSection from '@/components/CommentSection';
 import { suggestRelatedArticles } from '@/ai/flows/suggest-related-articles';
 import * as cheerio from 'cheerio';
@@ -43,8 +43,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 function getExcerptFromHtml(htmlContent: string, maxLength: number = 300): string {
   if (!htmlContent) return '';
   try {
-    const $ = cheerio.load(htmlContent);
-    let text = $('body').text(); // Get text from the body, Cheerio wraps content in html/body
+    const $ = cheerio.load(htmlContent); // Get text from the body, Cheerio wraps content in html/body
+    let text = $('body').text();
     text = text.replace(/\s\s+/g, ' ').trim(); // Normalize whitespace
     if (text.length > maxLength) {
       return text.substring(0, maxLength) + '...';
@@ -97,32 +97,66 @@ export default async function PostPage({ params }: PostPageProps) {
       });
 
       if (aiSuggestions.relatedPostIds.length > 0) {
-        // Map IDs to full post objects, maintaining order from AI if possible
         const suggestedPostMap = new Map(allPosts.map(p => [p.id, p]));
         relatedPosts = aiSuggestions.relatedPostIds
           .map(id => suggestedPostMap.get(id))
           .filter(p => p !== undefined) as Post[];
       }
     }
-  } catch (aiError) {
-    console.error("AI suggestion for related posts failed:", aiError);
-    // Fallback to simpler logic or empty if AI fails (optional)
-    // For now, if AI fails, relatedPosts will remain empty or use any prior logic.
-    // You could add the tag-based logic here as a fallback.
-    if (post.tags && post.tags.length > 0) {
-        relatedPosts = allPosts.filter(otherPost => {
-          if (otherPost.id === post!.id) return false; 
-          return otherPost.tags.some(tag => post!.tags.includes(tag));
-        }).slice(0, MAX_RELATED_POSTS);
-      } else {
-        relatedPosts = allPosts.filter(otherPost => otherPost.id !== post!.id).slice(0, MAX_RELATED_POSTS);
-      }
-  }
-  
-  // If AI suggestions are fewer than max, and no fallback was triggered, we might have fewer than 8.
-  // This is fine.
+    // If AI suggestions are fewer than max or AI didn't run, we might have less than MAX_RELATED_POSTS.
+    // If relatedPosts is still empty after AI attempt (or if AI wasn't called), apply tag-based fallback.
+    if (relatedPosts.length === 0 && post.tags && post.tags.length > 0) {
+      console.log("AI provided no/few suggestions, trying tag-based related posts.");
+      relatedPosts = allPosts.filter(otherPost => {
+        if (otherPost.id === post!.id) return false;
+        return otherPost.tags.some(tag => post!.tags.includes(tag));
+      }).slice(0, MAX_RELATED_POSTS);
+    }
 
-  const FALLBACK_SITE_URL = 'http://localhost:3000'; 
+    // If still no related posts, use a random selection as a final fallback
+    if (relatedPosts.length === 0) {
+        console.log("No AI or tag-based suggestions, falling back to random related posts.");
+        relatedPosts = allPosts
+            .filter(otherPost => otherPost.id !== post!.id)
+            .sort(() => 0.5 - Math.random()) // Simple random shuffle
+            .slice(0, MAX_RELATED_POSTS);
+    }
+
+
+  } catch (aiError: any) {
+    let errorDisplay = "An unexpected error occurred with AI suggestions.";
+    if (aiError && typeof aiError === 'object') {
+      if (aiError.message) {
+        errorDisplay = aiError.message;
+      } else {
+        const stringifiedError = JSON.stringify(aiError);
+        errorDisplay = stringifiedError === '{}' ? "Received an empty object as error from AI flow, check Genkit logs and API key." : stringifiedError;
+      }
+    } else if (typeof aiError === 'string') {
+      errorDisplay = aiError;
+    }
+    console.error(`AI suggestion for related posts failed. Details: ${errorDisplay}. Full error object seen in PostPage:`, aiError);
+
+    // Fallback logic if AI suggestion promise rejects
+    console.log("AI suggestion process failed, applying fallback for related posts.");
+    if (post.tags && post.tags.length > 0) {
+      console.log("Falling back to tag-based related posts due to AI error.");
+      relatedPosts = allPosts.filter(otherPost => {
+        if (otherPost.id === post!.id) return false;
+        return otherPost.tags.some(tag => post!.tags.includes(tag));
+      }).slice(0, MAX_RELATED_POSTS);
+    }
+
+    if (relatedPosts.length === 0) { // If tag-based didn't yield results or no tags
+      console.log("Falling back to random related posts due to AI error and no tag matches.");
+      relatedPosts = allPosts
+        .filter(otherPost => otherPost.id !== post!.id)
+        .sort(() => 0.5 - Math.random()) // Simple random shuffle
+        .slice(0, MAX_RELATED_POSTS);
+    }
+  }
+
+  const FALLBACK_SITE_URL = 'http://localhost:3000';
   let baseUrlToUse = process.env.NEXT_PUBLIC_SITE_URL;
 
   if (!baseUrlToUse) {
@@ -152,7 +186,7 @@ export default async function PostPage({ params }: PostPageProps) {
               <time dateTime={post.date}>{formattedDate}</time>
             </div>
             <div className="flex items-center">
-              <BookOpen className="w-4 h-4 mr-1.5" /> 
+              <BookOpen className="w-4 h-4 mr-1.5" />
               <span>{post.viewCount ?? 0} Reads</span>
             </div>
           </div>
@@ -187,9 +221,9 @@ export default async function PostPage({ params }: PostPageProps) {
                 </div>
               </div>
             )}
-            <SocialShareButtons 
-              postUrl={postUrl} 
-              postTitle={post.title} 
+            <SocialShareButtons
+              postUrl={postUrl}
+              postTitle={post.title}
               postDescription={pageDescription}
             />
           </footer>
@@ -197,9 +231,9 @@ export default async function PostPage({ params }: PostPageProps) {
       </article>
 
       {relatedPosts.length > 0 && (
-        <section className="max-w-4xl mx-auto mt-12 py-8"> 
+        <section className="max-w-4xl mx-auto mt-12 py-8">
           <h2 className="text-3xl font-headline font-bold text-primary mb-6 text-center">You may also like</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> 
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {relatedPosts.map((relatedPost) => (
               <PostCard key={relatedPost.id} post={relatedPost} />
             ))}
@@ -211,3 +245,4 @@ export default async function PostPage({ params }: PostPageProps) {
     </>
   );
 }
+
