@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
 import BannerAd from '@/components/BannerAd';
 import Image from 'next/image'; // Import next/image
-
+import Script from 'next/script';
 interface HeaderProps {
   siteSettings: SiteSettings | null;
   isAdminLoggedIn?: boolean;
@@ -66,7 +66,16 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
             )}
           </Link>
 
-
+<script type="text/javascript">
+	atOptions = {
+		'key' : 'fff490176317327192fad7d937b02c1b',
+		'format' : 'iframe',
+		'height' : 90,
+		'width' : 728,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
           
         </div>
 
