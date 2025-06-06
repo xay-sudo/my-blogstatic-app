@@ -65,6 +65,9 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
               <span>{siteSettings?.siteTitle || 'News Today'}</span>
             )}
           </Link>
+
+hellli
+          
         </div>
       </header>
 
