@@ -69,16 +69,16 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
 
           
         </div>
-	      <script type="text/javascript">
-	atOptions = {
+	<script type="text/javascript">
+	        atOptions = {
 		'key' : 'fff490176317327192fad7d937b02c1b',
 		'format' : 'iframe',
 		'height' : 90,
 		'width' : 728,
 		'params' : {}
 	};
-</script>
-<script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
+           </script>
+           <script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
       </header>
 
       {/* Navigation Bar */}
