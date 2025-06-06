@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -9,8 +8,9 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X } from 'lucide-react';
 import BannerAd from '@/components/BannerAd';
-import Image from 'next/image'; // Import next/image
-import Script from 'next/script';
+import Image from 'next/image';
+import Script from 'next/script'; // Import the Next.js Script component
+
 interface HeaderProps {
   siteSettings: SiteSettings | null;
   isAdminLoggedIn?: boolean;
@@ -41,11 +41,32 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
     };
   }, [isSearchOpen]);
 
-  // Check for a valid, non-empty siteLogoUrl
   const hasValidLogo = siteSettings?.siteLogoUrl && siteSettings.siteLogoUrl.trim() !== '';
 
   return (
     <>
+      {/* --- START: ADDED SCRIPT CODE --- */}
+      <Script id="ad-options-script" strategy="lazyOnload">
+        {`
+          atOptions = {
+            'key' : 'fff490176317327192fad7d937b02c1b',
+            'format' : 'iframe',
+            'height' : 90,
+            'width' : 728,
+            'params' : {}
+          };
+        `}
+<script type="text/javascript">
+	atOptions = {
+		'key' : 'fff490176317327192fad7d937b02c1b',
+		'format' : 'iframe',
+		'height' : 90,
+		'width' : 728,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
+
       {/* Main Header with Logo */}
       <header className="bg-card border-b border-border">
         <BannerAd settings={siteSettings} />
@@ -53,7 +74,7 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
           <Link href="/" className="flex items-center gap-4 text-3xl font-headline font-bold text-primary hover:text-primary/90 transition-colors">
             {hasValidLogo ? (
               <Image
-                src={siteSettings.siteLogoUrl!} // Non-null assertion because hasValidLogo checks it
+                src={siteSettings.siteLogoUrl!}
                 alt={siteSettings.siteTitle || 'Site Logo'}
                 width={240}
                 height={64}
@@ -65,20 +86,7 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
               <span>{siteSettings?.siteTitle || 'News Today'}</span>
             )}
           </Link>
-
-<script type="text/javascript">
-	atOptions = {
-		'key' : 'fff490176317327192fad7d937b02c1b',
-		'format' : 'iframe',
-		'height' : 90,
-		'width' : 728,
-		'params' : {}
-	};
-</script>
-<script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
-          
         </div>
-
       </header>
 
       {/* Navigation Bar */}
@@ -89,14 +97,13 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
             {/* Future nav links can go here */}
           </div>
 
-          {/* Spacer to push subsequent items to the right */}
           <div className="flex-grow" />
 
           {/* Group for all right-aligned items */}
-          <div className="flex items-center space-x-3"> {/* Handles spacing between search and theme toggle */}
+          <div className="flex items-center space-x-3">
             {/* Search Elements */}
             {isSearchOpen ? (
-              <div ref={searchWrapperRef} className="flex items-center space-x-2"> {/* Handles inner spacing for open search */}
+              <div ref={searchWrapperRef} className="flex items-center space-x-2">
                 <SearchBarClient />
                 <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)} aria-label="Close search" className="text-background hover:bg-accent/20 hover:text-accent-foreground">
                   <X className="w-5 h-5" />
