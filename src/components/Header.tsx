@@ -45,24 +45,16 @@ export default function Header({ siteSettings, isAdminLoggedIn }: HeaderProps) {
 
   return (
     <>
-      {/* --- START: ADDED SCRIPT CODE --- */}
-      <Script id="ad-options-script" strategy="lazyOnload">
-        {`
-          atOptions = {
-            'key' : 'fff490176317327192fad7d937b02c1b',
-            'format' : 'iframe',
-            'height' : 90,
-            'width' : 728,
-            'params' : {}
-          };
-        `}
-      </Script>
-      <Script
-        id="ad-invoke-script"
-        strategy="lazyOnload"
-        src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"
-      />
-      {/* --- END: ADDED SCRIPT CODE --- */}
+     <script type="text/javascript">
+	atOptions = {
+		'key' : 'fff490176317327192fad7d937b02c1b',
+		'format' : 'iframe',
+		'height' : 90,
+		'width' : 728,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//warningcanshipment.com/fff490176317327192fad7d937b02c1b/invoke.js"></script>
 
       {/* Main Header with Logo */}
       <header className="bg-card border-b border-border">
